@@ -1,0 +1,12 @@
+# Секреты
+.env
+
+# Данные и логи
+/data/
+/logs/
+
+# IDE / editor files
+.vscode/
+.idea/
+*.iml
+*.swp
