@@ -1,6 +1,10 @@
-﻿using AuthService.Data;
+﻿using System.Text;
+using AuthService.Data;
 using AuthService.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 namespace AuthService.Extensions;
 
@@ -30,6 +34,50 @@ public static class AuthorizationExtensions
             })
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders(); // Для сброса пароля и т.д.
+    }
+    public static IServiceCollection AddApplicationDbContext(this IServiceCollection services, string connectionString)
+    {
+        return services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseNpgsql(connectionString));
+    }
+
+    public static IServiceCollection AddApplicationIdentity(this IServiceCollection services)
+    {
+        return services.AddIdentity<IdentityUser, IdentityRole>()
+            .AddEntityFrameworkStores<ApplicationDbContext>()
+            .Services;
+    }
+
+    public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        var jwtSettings = configuration.GetSection("JwtSettings");
+        var secretKey = jwtSettings["SecretKey"];
+        var issuer = jwtSettings["Issuer"];
+        var audience = jwtSettings["Audience"];
+
+        if (string.IsNullOrEmpty(secretKey) || string.IsNullOrEmpty(issuer) || string.IsNullOrEmpty(audience))
+            throw new InvalidOperationException("JWT настройки некорректны");
+
+        services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = issuer,
+                    ValidAudience = audience,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+                };
+            });
+
+        return services;
     }
 
    

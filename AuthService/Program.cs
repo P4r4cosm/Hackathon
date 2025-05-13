@@ -1,29 +1,39 @@
-using System.Text;
-using AuthService.Data;
+
 using AuthService.Extensions;
+using AuthService.Infrastructure;
 using AuthService.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using DotNetEnv;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.IdentityModel.Tokens;
+
 
 Env.Load();
 var builder = WebApplication.CreateBuilder(args);
+var loggerFactory = LoggerFactory.Create(logBuilder => logBuilder.AddConsole()); // Создаем логгер
+var programLogger = loggerFactory.CreateLogger<Program>(); // Логгер для Program
 builder.Logging.AddConsole();
-// Получаем значения из конфигурации (которая теперь включает .env)
+
+
+// Получаем значения из конфигурации для POSTGRES(которая теперь включает .env)
 var dbHost = builder.Configuration["POSTGRES_HOST"];
 var dbPort = builder.Configuration["POSTGRES_PORT"];
 var dbUser = builder.Configuration["POSTGRES_USER"];
 var dbPassword = builder.Configuration["POSTGRES_PASSWORD"];
 var dbName = builder.Configuration["POSTGRES_DB"];
-// проверка на null/empty для всех частей строки подключения
-if (string.IsNullOrEmpty(dbHost) || string.IsNullOrEmpty(dbPort) || string.IsNullOrEmpty(dbUser) ||
-    string.IsNullOrEmpty(dbPassword) || string.IsNullOrEmpty(dbName))
+var requiredEnvVars = new Dictionary<string, string?>
 {
-    throw new InvalidOperationException("Одна или несколько переменных окружения для подключения" +
-                                        " к PostgreSQL не установлены (POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB).");
+    ["POSTGRES_HOST"] = dbHost,
+    ["POSTGRES_PORT"] = dbPort,
+    ["POSTGRES_USER"] = dbUser,
+    ["POSTGRES_PASSWORD"] = dbPassword,
+    ["POSTGRES_DB"] = dbName
+};
+
+foreach (var (key, value) in requiredEnvVars)
+{
+    if (string.IsNullOrEmpty(value))
+        throw new InvalidOperationException($"Переменная окружения {key} не установлена");
 }
+
 // получаем роли
 var Roles = builder.Configuration["ROLES"]?
     .Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -32,17 +42,9 @@ if (Roles is null || Roles.Count() == 0)
     throw new InvalidOperationException("Roles in .env is empty.");
 }
 
+//конфигурируем Kestrel (добавляем сертификат)
+KestrelConfiguratorHelper.ConfigureKestrel(builder);
 
-//Получаем значения из .env для настройки JWT 
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"];
-var issuer = jwtSettings["Issuer"];
-var audience = jwtSettings["Audience"];
-// проверка на null/empty всех параметров JWT
-if (string.IsNullOrEmpty(secretKey) || string.IsNullOrEmpty(issuer) || string.IsNullOrEmpty(audience))
-{
-    throw new InvalidOperationException("Проблема с настройкой JWT (secretKey, issuer, audience).");
-}
 
 var connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPassword};";
 
@@ -50,8 +52,7 @@ var services = builder.Services;
 
 
 // 1. Добавление DbContext с использованием строки подключения
-services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
+services.AddApplicationDbContext(connectionString);
 
 // 2. Добавление Identity
 services.AddIdentity();
@@ -60,24 +61,7 @@ services.AddIdentity();
 services.AddScoped<DbSeeder>();
 
 // Добавляем аутентификацию
-services.AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = issuer,
-            ValidAudience = audience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
-        };
-    });
+services.AddJwtAuthentication(builder.Configuration);
 // Добавляем авторизацию
 builder.Services.AddAuthorization(options =>
 {
