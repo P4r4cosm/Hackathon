@@ -7,7 +7,8 @@ namespace AuthService.Data;
 
 public class ApplicationDbContext : IdentityDbContext<ApplicationUser> // Или IdentityDbContext<IdentityUser>
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, IConfiguration configuration)
         : base(options)
     {
         Database.EnsureCreated();
