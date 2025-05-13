@@ -35,6 +35,7 @@ public class AuthController : ControllerBase
         {
             //назначаем всем регистрирующимся user
             await _userManager.AddToRoleAsync(user, "user");
+            
             return Ok(new { Message = "User registered successfully" });
         }
 
@@ -55,7 +56,13 @@ public class AuthController : ControllerBase
         {
             var roles = await _userManager.GetRolesAsync(user);
             var token = GenerateJwtToken(user, roles);
-            return Ok(new { Token = token });
+            Response.Cookies.Append("auth_token", token, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                Expires = DateTime.UtcNow.AddDays(7)
+            });
+            return Ok(new { Message = "Login successful" });
         }
         return Unauthorized(new { Message = "Invalid credentials" });
     }
@@ -71,7 +78,13 @@ public class AuthController : ControllerBase
             var role = await _userManager.GetRolesAsync(user!);
             var token = GenerateJwtToken(user!, role);
 
-            return Ok(new { Token = token });
+            Response.Cookies.Append("auth_token", token, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                Expires = DateTime.UtcNow.AddDays(7)
+            });
+            return Ok(new { Message = "Login successful" });
         }
         return Unauthorized(new { Message = "Invalid credentials" });
     }
