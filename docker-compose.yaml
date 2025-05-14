@@ -20,9 +20,6 @@ services:
     env_file:
       - .env 
     container_name: AuthService
-    ports:
-      - "8231:80"   # Хост 8080 -> Контейнер 80 (HTTP)
-      - "8023:443"  # Хост 8443 -> Контейнер 443 (HTTPS)
     environment:
       - ASPNETCORE_ENVIRONMENT=Development # Или Development, как вам нужно
       - POSTGRES_HOST=postgres
@@ -38,8 +35,28 @@ services:
       
       # Настройки для HTTPS
       - ASPNETCORE_URLS=http://+:80;https://+:443 # Kestrel будет слушать оба порта
-      # KESTREL_CERTIFICATE_PATH уже задан в Dockerfile через ENV
       - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD} # Ссылка на переменную из .env
-
     depends_on:
       - postgres
+
+  gateway:
+    build:
+      context: . # Контекст сборки - корень проекта
+      dockerfile: HackathonGateway/HackathonGateway/Dockerfile # Путь к Dockerfile вашего сервиса
+    env_file:
+     - .env
+    container_name: Gateway
+    ports:
+      - "8000:80"   # Хост 8080 -> Контейнер 80 (HTTP)
+      - "8001:443"  # Хост 8443 -> Контейнер 443 (HTTPS)
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development 
+      - JwtSettings__SecretKey=${JwtSettings__SecretKey}
+      - JwtSettings__Issuer=${JwtSettings__Issuer}
+      - JwtSettings__Audience=${JwtSettings__Audience}
+      - JwtSettings__DurationInHours=${JwtSettings__DurationInHours}
+      # Настройки для HTTPS
+      - ASPNETCORE_URLS=http://+:80;https://+:443 # Kestrel будет слушать оба порта
+      - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD} # Ссылка на переменную из .env
+    depends_on:
+      - authservice
