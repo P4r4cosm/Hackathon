@@ -69,13 +69,18 @@ Thumbs.db
 # Docker
 .docker/data/*
 **/data/postgres/
+# База данных PostgreSQL
+**/data/postgres/*
+data/postgres
+data/postgres/*
 
 # SSL/TLS certificates (исключаем так как они конфиденциальны в проде)
-# Можно убрать эти строки если нужно держать в репозитории демо/тестовые сертификаты
-# *.pfx
-# *.pem
-# *.key
-# *.crt
+*.pfx
+*.pem
+*.key
+*.crt
+cert.pfx
+cert.pem
 
 # Логи и временные файлы
 logs/
@@ -88,8 +93,11 @@ yarn-error.log*
 *.swo
 
 # Локальные конфигурационные файлы
-# Закомментируйте следующую строку, если хотите хранить .env файл с незначимыми параметрами
-# .env
+.env
+.env.local
+.env.development
+.env.test
+.env.production
 
 # Файлы данных и миграций базы данных, которые не нужно хранить в репо
 *.mdf
