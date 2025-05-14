@@ -12,13 +12,15 @@ services:
       - "5432:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
-
   authservice:
     build:
       context: . # Контекст сборки - корень проекта
       dockerfile: AuthService/Dockerfile # Путь к Dockerfile вашего сервиса
     env_file:
       - .env 
+    ports:
+      - "8012:80"   # Хост 8080 -> Контейнер 80 (HTTP)
+      - "8011:443"
     container_name: AuthService
     environment:
       - ASPNETCORE_ENVIRONMENT=Development # Или Development, как вам нужно
@@ -38,6 +40,7 @@ services:
       - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD} # Ссылка на переменную из .env
     depends_on:
       - postgres
+
 
   gateway:
     build:
