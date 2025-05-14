@@ -1,0 +1,103 @@
+name: Hackathon
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres_hackathon
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  authservice:
+    build:
+      context: . # Контекст сборки - корень проекта
+      dockerfile: AuthService/Dockerfile # Путь к Dockerfile вашего сервиса
+    env_file:
+      - .env 
+    ports:
+      - "8012:80"   # Хост 8012 -> Контейнер 80 (HTTP)
+      - "8011:443"  # Хост 8011 -> Контейнер 443 (HTTPS)
+    container_name: AuthService
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - ROLES=${ROLES}
+      - JwtSettings__SecretKey=${JwtSettings__SecretKey}
+      - JwtSettings__Issuer=${JwtSettings__Issuer}
+      - JwtSettings__Audience=${JwtSettings__Audience}
+      - JwtSettings__DurationInHours=${JwtSettings__DurationInHours}
+      # Настройки для HTTPS
+      - ASPNETCORE_URLS=http://+:80;https://+:443
+      - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD}
+      # CORS настройки
+      - AllowedOrigins__0=http://localhost:3010
+      - AllowedOrigins__1=http://localhost:3000
+      - AllowedOrigins__2=http://localhost:8000
+      - AllowedOrigins__3=http://localhost:8001
+      - AllowedOrigins__4=http://authservicefrontend
+      - AllowedOrigins__5=http://frontend
+      - AllowedOrigins__6=http://gateway
+    volumes:
+      - ./cert.pfx:/app/cert.pfx
+    depends_on:
+      - postgres
+
+  gateway:
+    build:
+      context: . # Контекст сборки - корень проекта
+      dockerfile: HackathonGateway/HackathonGateway/Dockerfile # Путь к Dockerfile вашего сервиса
+    env_file:
+      - .env
+    container_name: Gateway
+    ports:
+      - "8000:80"   # Хост 8000 -> Контейнер 80 (HTTP)
+      - "8001:443"  # Хост 8001 -> Контейнер 443 (HTTPS)
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development 
+      - JwtSettings__SecretKey=${JwtSettings__SecretKey}
+      - JwtSettings__Issuer=${JwtSettings__Issuer}
+      - JwtSettings__Audience=${JwtSettings__Audience}
+      - JwtSettings__DurationInHours=${JwtSettings__DurationInHours}
+      # Настройки для HTTPS
+      - ASPNETCORE_URLS=http://+:80;https://+:443
+      - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD}
+      # CORS настройки
+      - AllowedOrigins__0=http://localhost:3010
+      - AllowedOrigins__1=http://localhost:3000
+      - AllowedOrigins__2=http://authservicefrontend
+      - AllowedOrigins__3=http://frontend
+    volumes:
+      - ./cert.pfx:/app/cert.pfx
+    depends_on:
+      - authservice
+
+  frontend:
+    build:
+      context: . # Контекст сборки - корень проекта
+      dockerfile: FrontendService/Dockerfile
+    container_name: Frontend
+    ports:
+      - "3000:80"   # Хост 3000 -> Контейнер 80 (HTTP)
+    depends_on:
+      - gateway
+
+  authservicefrontend:
+    build:
+      context: . # Контекст сборки - корень проекта
+      dockerfile: AuthServiceFrontend/Dockerfile
+    container_name: AuthServiceFrontend
+    restart: always
+    ports:
+      - "3010:80"   # Хост 3010 -> Контейнер 80 (HTTP)
+    depends_on:
+      - authservice
+      - gateway
