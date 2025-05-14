@@ -4,13 +4,23 @@
         <TargetFramework>net9.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="DotNetEnv" Version="3.1.1" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.5" />
+        <PackageReference Include="Microsoft.AspNetCore.HttpOverrides" Version="2.3.0" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.4"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4" />
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
         <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="8.1.1" />
+        <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
     </ItemGroup>
 
 </Project>
