@@ -40,8 +40,6 @@ services:
       - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD} # Ссылка на переменную из .env
     depends_on:
       - postgres
-
-
   gateway:
     build:
       context: . # Контекст сборки - корень проекта
@@ -63,3 +61,32 @@ services:
       - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD} # Ссылка на переменную из .env
     depends_on:
       - authservice
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-wolfi:8.17.3
+    container_name: elastic
+    restart: unless-stopped
+    environment:
+      - node.name=elasticsearch
+      - cluster.name=es-docker-cluster
+      - discovery.type=single-node
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+      - ./logs/elasticsearch:/usr/share/elasticsearch/logs
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.17.3
+    container_name: kibana_hackaton
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    environment:
+      - node.name=kibana
+      - cluster=es-docker-cluster
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
