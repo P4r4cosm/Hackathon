@@ -47,6 +47,7 @@ body{
 }
 
 .container button{
+    border-color: #fff;
     background-color: #512da8;
     color: #fff;
     font-size: 12px;
@@ -62,7 +63,6 @@ body{
 
 .container button.hidden{
     background-color: transparent;
-    border-color: #fff;
 }
 
 .container form{
