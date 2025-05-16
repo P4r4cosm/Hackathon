@@ -74,10 +74,51 @@ services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
    
 services.AddControllers();
+
+// Добавление и конфигурация CORS
+
 services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policyBuilder =>
     {
+
+        // Получаем список разрешенных источников из конфигурации или используем значения по умолчанию
+        var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
+        
+        if (allowedOrigins != null && allowedOrigins.Length > 0)
+        {
+            policyBuilder
+                .WithOrigins(allowedOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
+        }
+        else
+        {
+            // Для разработки, если ничего не настроено
+            if (builder.Environment.IsDevelopment())
+            {
+                policyBuilder
+                    .WithOrigins(
+                        "http://localhost:3010", 
+                        "http://localhost:3000",
+                        "http://127.0.0.1:3010",
+                        "http://127.0.0.1:3000"
+                    )
+                    .AllowAnyMethod()
+                    .AllowAnyHeader()
+                    .AllowCredentials();
+            }
+            else
+            {
+                // Если это продакшн и нет настроек - ограничиваем доступ максимально
+                policyBuilder
+                    .WithOrigins("https://" + builder.Configuration["Kestrel:Endpoints:Https:Host"] ?? "localhost")
+                    .AllowAnyMethod()
+                    .AllowAnyHeader()
+                    .AllowCredentials();
+            }
+        }
         policyBuilder
             .WithOrigins("https://localhost:3000") // URL вашего фронтенда
             .AllowAnyMethod()
@@ -100,7 +141,9 @@ if (app.Environment.IsDevelopment())
     });
 }
 app.UseCors("CorsPolicy"); // Применить CORS
-app.UseHttpsRedirection();
+
+// app.UseHttpsRedirection(); // Отключаем автоматический редирект на HTTPS
+
 // Важно: Аутентификация и Авторизация ДО YARP
 app.UseAuthentication();
 

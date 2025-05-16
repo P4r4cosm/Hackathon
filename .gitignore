@@ -1,3 +1,48 @@
+
+# .NET Core
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+_ReSharper*/
+*.sln.iml
+.idea/
+*.pidb
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.dotCover
+*.coverage
+*.coveragexml
+nCrunchTemp_*
+project.lock.json
+project.fragment.lock.json
+artifacts/
+**/Properties/launchSettings.json
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.pch
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*_wpftmp.csproj
+*.vsix
+
+# Visual Studio files
+=======
 # Секреты
 .env
 
@@ -29,12 +74,70 @@ obj/
 *.suo
 
 # Игнорировать настройки VS Code (кроме тех, что нужны команде)
+
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
 *.code-workspace
+.history/
+
+# Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp/
+.pnp.js
+coverage/
+build/
+dist/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/data/*
+**/data/postgres/
+# База данных PostgreSQL
+**/data/postgres/*
+data/postgres
+data/postgres/*
+
+# SSL/TLS certificates (исключаем так как они конфиденциальны в проде)
+*.pfx
+*.pem
+*.key
+*.crt
+cert.pfx
+cert.pem
+
+# Логи и временные файлы
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*~
+*.swp
+*.swo
+
+# Локальные конфигурационные файлы
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Файлы данных и миграций базы данных, которые не нужно хранить в репо
+*.mdf
+*.ldf
+*.ndf 
+=======
 
 ## Игнорировать файлы блокировки зависимостей (NuGet) ##
 project.lock.json
