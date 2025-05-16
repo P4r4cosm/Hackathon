@@ -1,3 +1,4 @@
+
 # .NET Core
 bin/
 obj/
@@ -41,6 +42,39 @@ artifacts/
 *.vsix
 
 # Visual Studio files
+=======
+# Секреты
+.env
+
+# Данные и логи
+/data/
+/logs/
+
+/bin
+
+# IDE / editor files
+.vscode/
+.idea/
+*.iml
+*.swp
+
+
+# --- .NET / ASP.NET Core ---
+
+## Игнорировать выходные каталоги сборки ##
+bin/
+obj/
+
+## Игнорировать пользовательские файлы Visual Studio и IDE ##
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+.idea/
+*.suo
+
+# Игнорировать настройки VS Code (кроме тех, что нужны команде)
+
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -103,3 +137,78 @@ yarn-error.log*
 *.mdf
 *.ldf
 *.ndf 
+=======
+
+## Игнорировать файлы блокировки зависимостей (NuGet) ##
+project.lock.json
+packages/
+
+## Игнорировать файлы конфигурации, специфичные для среды разработки ##
+# Часто содержит секреты или локальные пути. Используйте User Secrets или переменные среды.
+appsettings.Development.json
+
+## Игнорировать User Secrets файлы ##
+# Файл secrets.json содержит ID, но сами секреты хранятся вне проекта.
+# Лучше не добавлять сам ID файл, но если добавили, убедитесь, что он пустой.
+secrets.json
+
+## Игнорировать временные файлы ReSharper ##
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+## Игнорировать результаты тестов ##
+TestResults/
+*.trx
+
+## Игнорировать файлы публикации ##
+publish/
+*.Publish.xml
+*.pubxml
+*.publish.xml
+
+## Игнорировать локальные файлы базы данных ##
+*.mdf
+*.ldf
+*.sdf
+
+## Игнорировать файлы логов ##
+*.log
+logs/
+*.log.*
+
+## Игнорировать временные и резервные файлы ##
+*.tmp
+*.bak
+*.swp
+
+## Игнорировать сгенерированные файлы (например, Roslyn analyzers) ##
+*.Generated.*
+*.Designer.*
+
+## Игнорировать файлы, специфичные для ОС ##
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+## Игнорировать файлы кэша NuGet ##
+# Обычно не в каталоге проекта, но на всякий случай
+*.nupkg
+*.snupkg
+
+## Игнорировать выходные файлы Docker ##
+docker-compose.override.yml
+
+## Игнорировать node_modules (если используется NPM/Yarn для фронтенда) ##
+# node_modules/
+# npm-debug.log*
+# yarn-debug.log*
+# yarn-error.log*
+
+## Игнорировать специфичные для Build server файлы (опционально) ##
+# **/packages.config # Если используется старый формат пакетов
+# NuGet.exe # Если он вдруг попал в репозиторий
