@@ -41,9 +41,14 @@ services.AddControllers();
 services.AddSwaggerGen();
 services.AddScoped<AudioMetadataService>();
 services.AddOpenApi();
+services.AddScoped<DbSeederService>();
 
 var app = builder.Build();
-
+using (var scope = app.Services.CreateScope())
+{
+    var seeder = scope.ServiceProvider.GetRequiredService<DbSeederService>();
+    seeder.Seed();
+}
 
 app.UseSwagger();
 app.UseSwaggerUI(options =>
