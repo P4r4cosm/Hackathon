@@ -24,11 +24,6 @@ services:
       - "8011:443"  # Хост 8011 -> Контейнер 443 (HTTPS)
     container_name: AuthService
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - "8012:80"   # Хост 8080 -> Контейнер 80 (HTTP)
-      - "8011:443"
-    container_name: AuthService
-    environment:
       - ASPNETCORE_ENVIRONMENT=Development # Или Development, как вам нужно
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=${POSTGRES_PORT}
@@ -62,10 +57,6 @@ services:
       dockerfile: HackathonGateway/HackathonGateway/Dockerfile # Путь к Dockerfile вашего сервиса
     env_file:
       - .env
-    container_name: Gateway
-    ports:
-      - "8000:80"   # Хост 8000 -> Контейнер 80 (HTTP)
-      - "8001:443"  # Хост 8001 -> Контейнер 443 (HTTPS)
     container_name: Gateway
     ports:
       - "8000:80"   # Хост 8080 -> Контейнер 80 (HTTP)
@@ -110,10 +101,7 @@ services:
     depends_on:
       - authservice
       - gateway
-      - ASPNETCORE_URLS=http://+:80;https://+:443 # Kestrel будет слушать оба порта
-      - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD} # Ссылка на переменную из .env
-    depends_on:
-      - authservice
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch-wolfi:8.17.3
     container_name: elastic
