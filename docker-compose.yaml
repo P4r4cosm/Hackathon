@@ -25,6 +25,11 @@ services:
     container_name: AuthService
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - "8012:80"   # Хост 8080 -> Контейнер 80 (HTTP)
+      - "8011:443"
+    container_name: AuthService
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development # Или Development, как вам нужно
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -46,10 +51,12 @@ services:
       - AllowedOrigins__4=http://authservicefrontend
       - AllowedOrigins__5=http://frontend
       - AllowedOrigins__6=http://gateway
+       # Настройки для HTTPS
     volumes:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
       - postgres
+
 
   gateway:
     build:
@@ -61,6 +68,10 @@ services:
     ports:
       - "8000:80"   # Хост 8000 -> Контейнер 80 (HTTP)
       - "8001:443"  # Хост 8001 -> Контейнер 443 (HTTPS)
+    container_name: Gateway
+    ports:
+      - "8000:80"   # Хост 8080 -> Контейнер 80 (HTTP)
+      - "8001:443"  # Хост 8443 -> Контейнер 443 (HTTPS)
     environment:
       - ASPNETCORE_ENVIRONMENT=Development 
       - JwtSettings__SecretKey=${JwtSettings__SecretKey}
@@ -101,3 +112,7 @@ services:
     depends_on:
       - authservice
       - gateway
+      - ASPNETCORE_URLS=http://+:80;https://+:443 # Kestrel будет слушать оба порта
+      - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD} # Ссылка на переменную из .env
+    depends_on:
+      - authservice

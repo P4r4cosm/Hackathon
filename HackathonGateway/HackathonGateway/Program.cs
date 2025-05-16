@@ -76,10 +76,12 @@ services.AddReverseProxy()
 services.AddControllers();
 
 // Добавление и конфигурация CORS
+
 services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policyBuilder =>
     {
+
         // Получаем список разрешенных источников из конфигурации или используем значения по умолчанию
         var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
         
@@ -117,6 +119,11 @@ services.AddCors(options =>
                     .AllowCredentials();
             }
         }
+        policyBuilder
+            .WithOrigins("https://localhost:3000") // URL вашего фронтенда
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials(); // Важно для передачи кук
     });
 });
 
@@ -134,7 +141,9 @@ if (app.Environment.IsDevelopment())
     });
 }
 app.UseCors("CorsPolicy"); // Применить CORS
+
 // app.UseHttpsRedirection(); // Отключаем автоматический редирект на HTTPS
+
 // Важно: Аутентификация и Авторизация ДО YARP
 app.UseAuthentication();
 
