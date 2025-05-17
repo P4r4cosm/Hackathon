@@ -1,17 +1,26 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using SoundService.Models;
+using SoundService.Repositories;
 using SoundService.Services;
 
 namespace SoundService.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AudioController: ControllerBase
+public class AudioController : ControllerBase
 {
     private readonly AudioMetadataService _audioMetadataService;
-    public AudioController(AudioMetadataService audioMetadataService)
+    private readonly AudioRecordRepository _audioRecordRepository;
+    private readonly ILogger<AudioController> _logger;
+
+    public AudioController(AudioMetadataService audioMetadataService, AudioRecordRepository audioRecordRepository,
+        ILogger<AudioController> logger)
     {
-        _audioMetadataService=audioMetadataService;
+        _audioMetadataService = audioMetadataService;
+        _audioRecordRepository = audioRecordRepository;
+        _logger = logger;
     }
+
     [HttpPost("upload")]
     public async Task<IActionResult> UploadAudio(IFormFile file)
     {
@@ -27,11 +36,47 @@ public class AudioController: ControllerBase
         {
             await file.CopyToAsync(stream);
         }
+
         try
         {
-            var metadata = _audioMetadataService.ExtractMetadata(tempFilePath, file.FileName);
+            //достаём метаданные
+            var metadata = await _audioMetadataService.CreateAudioRecordFromMetadata(tempFilePath, file.FileName);
+            _logger.LogInformation("Metadata: {Metadata}", metadata);
+
+            //забрасываем трек в сервис, улучшающий звук
+
+            //забрасываем улучшенный трек в сервис, достающий вокал
+
+            //забрасываем трек в нейронку и достаём текст с таймкодами
+
+            //забрасываем текст/трек для получения ключевых слов
+
+            //забрасываем текст/трек для получения тегов
+
+            //сохраняем трек в postgres и в elastic
+            _logger.LogInformation("Saving record to postgres...");
+            await _audioRecordRepository.SaveAsync(metadata);
+            var audioRecordElastic = new AudioRecordForElastic
+            {
+                Id = metadata.Id,
+                Title = metadata.Title,
+                FullText = "test",
+                TranscriptSegments = new List<TranscriptSegment>()
+                {
+                    new TranscriptSegment()
+                    {
+                        Start = 0,
+                        End = 10,
+                        Text = "test"
+                    }
+                }
+            };
+            
+            _logger.LogInformation("Saving record to elastic...");
+            await _audioRecordRepository.SaveAsync(audioRecordElastic);
+            //удаляем временный файл
             System.IO.File.Delete(tempFilePath);
-            return Ok(metadata);
+            return Ok("Record saved successfully.");
         }
         catch (Exception ex)
         {

@@ -7,4 +7,9 @@ public class Album
     public int? Year { get; set; }
 
     public ICollection<AudioRecord> Tracks { get; set; }
+    
+    // Добавляем ссылку на автора
+    public Guid AuthorId { get; set; } // Внешний ключ
+    public Author Author { get; set; } // Навигационное свойство
+
 }

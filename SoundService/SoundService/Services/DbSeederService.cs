@@ -21,7 +21,7 @@ public class DbSeederService
             var exists = _context.Database.GetService<IRelationalDatabaseCreator>().Exists();
             if (!exists)
             {
-                _context.Database.EnsureCreated(); // Создаём БД и таблицы
+                // _context.Database.EnsureCreated(); // Создаём БД и таблицы
             }
         }
     }
