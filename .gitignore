@@ -49,7 +49,8 @@ artifacts/
 # Данные и логи
 /data/
 /logs/
-
+/tracks
+/music_test
 /bin
 
 # IDE / editor files
@@ -58,6 +59,7 @@ artifacts/
 *.iml
 *.swp
 
+*.rar
 
 # --- .NET / ASP.NET Core ---
 
