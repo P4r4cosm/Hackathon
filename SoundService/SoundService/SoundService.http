@@ -1,0 +1,6 @@
+@SoundService_HostAddress = http://localhost:5077
+
+GET {{SoundService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
