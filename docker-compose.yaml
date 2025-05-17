@@ -131,3 +131,60 @@ services:
       - node.name=kibana
       - cluster=es-docker-cluster
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address :9001
+
+  mc-init:
+    image: minio/mc
+    container_name: mc-init
+    depends_on:
+      - minio
+    volumes:
+      # Эта строка отвечает за то, чтобы содержимое вашей папки
+      # ./music_test/original_tracks на хосте было доступно
+      # внутри контейнера mc-init по пути /init-audio
+      - ./music_test/:/init-audio
+    entrypoint: |
+      /bin/sh -c "
+        echo 'Ожидание MinIO...'
+        sleep 8 # Можно немного увеличить sleep для надежности, если MinIO стартует медленно
+
+        echo 'Настройка mc клиента...'
+        mkdir -p /root/.mc
+        # Убедитесь, что accessKey и secretKey здесь совпадают с MINIO_ROOT_USER/PASSWORD
+        # или используйте переменные окружения для mc alias set, как предлагалось ранее
+        echo '{\"version\": \"9\", \"hosts\": {\"local\": {
+          \"url\": \"http://minio:9000\",
+          \"accessKey\": \"minioadmin\",
+          \"secretKey\": \"minioadmin\",
+          \"api\": \"S3v4\"
+        }}}' > /root/.mc/config.json
+
+        echo 'Создание бакета local/audio-bucket (если не существует)...'
+        mc mb --ignore-existing local/audio-bucket
+
+        echo '🔄 Зеркалирую все содержимое /init-audio/ в local/audio-bucket/ сохраняя структуру...'
+        # Ключевая команда: mc mirror
+        # --overwrite перезапишет существующие файлы в бакете, если они есть и в источнике
+        # Если нужно, чтобы удалялись файлы в бакете, которых нет в источнике, добавьте --remove
+        mc mirror --overwrite /init-audio/ local/audio-bucket/
+
+        # Проверка: вывести список файлов в бакете для отладки
+        echo 'Содержимое бакета local/audio-bucket/ после зеркалирования:'
+        mc ls --recursive local/audio-bucket/
+
+        if [ $? -eq 0 ]; then
+          echo '✅ Процесс зеркалирования успешно завершен.'
+        else
+          echo '❌ Ошибка во время выполнения mc mirror или mc ls.'
+        fi
+      "
