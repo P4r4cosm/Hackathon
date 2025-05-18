@@ -8,15 +8,13 @@ public class ApplicationDbContext : DbContext
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
-       // Database.EnsureCreated();
+       // Удаляем Database.EnsureCreated(), так как это мешает миграциям
     }
-    public DbSet<AudioRecord?> AudioRecords { get; set; }
+    public DbSet<AudioRecord> AudioRecords { get; set; }
     public DbSet<Author> Authors { get; set; }
     public DbSet<Album> Albums { get; set; }
     public DbSet<Genre> Genres { get; set; }
-    public DbSet<AudioKeyword> Keywords { get; set; }
     public DbSet<AudioKeyword> AudioKeywords { get; set; }
-    public DbSet<AudioThematicTag> ThematicTags { get; set; }
     public DbSet<AudioThematicTag> AudioThematicTags { get; set; }
     //public DbSet<TranscriptSegment> TranscriptSegments { get; set; }
     public DbSet<ModerationStatus> ModerationStatuses { get; set; }

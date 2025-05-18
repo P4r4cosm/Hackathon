@@ -109,6 +109,9 @@ services:
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
       - ELASTIC_URI=${ELASTIC_URI}
+    depends_on:
+      postgres:
+        condition: service_healthy
   frontend:
     build:
       context: . # Контекст сборки - корень проекта

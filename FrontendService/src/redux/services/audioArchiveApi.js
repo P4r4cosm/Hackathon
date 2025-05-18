@@ -3,69 +3,92 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 export const audioArchiveApi = createApi({
   reducerPath: 'audioArchiveApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://localhost:8000/api/',
+    baseUrl: 'http://localhost:8000/',
+    credentials: 'include', // Включаем отправку и получение куки для JWT-аутентификации
+    prepareHeaders: (headers) => {
+      // Если нужны дополнительные заголовки
+      headers.set('Content-Type', 'application/json');
+      return headers;
+    },
   }),
   tagTypes: ['Recording', 'Author', 'Tag'],
   endpoints: (builder) => ({
     // Получение списка записей
     getAllRecordings: builder.query({ 
-      query: () => 'recordings' 
+      query: () => 'tracks' 
     }),
     
     // Получение записей по категории/тегу
     getRecordingsByTag: builder.query({ 
-      query: (tag) => `recordings/tag/${tag}` 
+      query: (tag) => `tracks?tag=${tag}` 
     }),
     
     // Получение записей по году
     getRecordingsByYear: builder.query({ 
-      query: (year) => `recordings/year/${year}` 
+      query: (year) => `tracks?year=${year}` 
     }),
     
     // Получение записей по автору
     getRecordingsByAuthor: builder.query({ 
-      query: (authorId) => `recordings/author/${authorId}` 
+      query: (authorId) => `tracks?authorId=${authorId}` 
     }),
     
     // Поиск записей
     searchRecordings: builder.query({ 
-      query: (searchTerm) => `recordings/search?query=${searchTerm}` 
+      query: (searchTerm) => `tracks?query=${searchTerm}` 
     }),
     
     // Детали записи
     getRecordingDetails: builder.query({ 
-      query: (id) => `recordings/${id}` 
+      query: (id) => `track/${id}` 
     }),
     
-    // Получение похожих записей
+    // Получение текста записи
+    getRecordingText: builder.query({ 
+      query: (id) => `track_text/${id}` 
+    }),
+    
+    // Получение похожих записей (временно используем обычный список записей)
     getRelatedRecordings: builder.query({ 
-      query: (id) => `recordings/${id}/related` 
+      query: (id) => `tracks?related=${id}` 
     }),
     
-    // Список авторов
+    // Список авторов (временно возвращаем пустой массив, т.к. эндпоинта нет)
     getAuthors: builder.query({
-      query: () => 'authors'
+      queryFn: () => ({ data: [] })
     }),
     
-    // Детали автора
+    // Детали автора (временно возвращаем заглушку, т.к. эндпоинта нет)
     getAuthorDetails: builder.query({
-      query: (id) => `authors/${id}`
+      queryFn: (id) => ({ 
+        data: { 
+          id, 
+          name: 'Неизвестный автор', 
+          biography: 'Информация отсутствует' 
+        } 
+      })
     }),
     
-    // Список тегов/категорий
+    // Список тегов/категорий (временно возвращаем пустой массив, т.к. эндпоинта нет)
     getTags: builder.query({
-      query: () => 'tags'
+      queryFn: () => ({ data: [] })
     }),
     
-    // Статистика (для дашборда)
+    // Статистика (временно возвращаем заглушку, т.к. эндпоинта нет)
     getStatistics: builder.query({
-      query: () => 'statistics'
+      queryFn: () => ({ 
+        data: { 
+          totalRecordings: 0, 
+          totalAuthors: 0,
+          yearStats: [] 
+        } 
+      })
     }),
     
     // Загрузка новой записи
     uploadRecording: builder.mutation({
       query: (formData) => ({
-        url: 'audio/upload',
+        url: 'upload',
         method: 'POST',
         body: formData,
       }),
@@ -75,40 +98,25 @@ export const audioArchiveApi = createApi({
     // Скачивание аудиофайла (позволяет получить blob)
     downloadAudio: builder.query({
       query: (path) => ({
-        url: `audio/download`,
+        url: `download`,
         params: { path },
         responseHandler: (response) => response.blob(),
       }),
     }),
     
-    // Обновление метаданных записи
+    // Обновление метаданных записи (временно деактивировано, т.к. эндпоинта нет)
     updateRecording: builder.mutation({
-      query: ({ id, data }) => ({
-        url: `recordings/${id}`,
-        method: 'PUT',
-        body: data,
-      }),
-      invalidatesTags: ['Recording'],
+      queryFn: () => ({ data: { success: true } })
     }),
     
-    // Обновление транскрипции текста
+    // Обновление транскрипции текста (временно деактивировано, т.к. эндпоинта нет)
     updateTranscription: builder.mutation({
-      query: ({ id, text }) => ({
-        url: `recordings/${id}/transcription`,
-        method: 'PUT',
-        body: { text },
-      }),
-      invalidatesTags: ['Recording'],
+      queryFn: () => ({ data: { success: true } })
     }),
     
-    // Управление тегами
+    // Управление тегами (временно деактивировано, т.к. эндпоинта нет)
     manageTag: builder.mutation({
-      query: ({ action, tagData }) => ({
-        url: action === 'create' ? 'tags' : `tags/${tagData.id}`,
-        method: action === 'create' ? 'POST' : action === 'update' ? 'PUT' : 'DELETE',
-        body: action !== 'delete' ? tagData : undefined,
-      }),
-      invalidatesTags: ['Tag'],
+      queryFn: () => ({ data: { success: true } })
     }),
   }),
 });
@@ -120,6 +128,7 @@ export const {
   useGetRecordingsByAuthorQuery,
   useSearchRecordingsQuery,
   useGetRecordingDetailsQuery,
+  useGetRecordingTextQuery,
   useGetRelatedRecordingsQuery,
   useGetAuthorsQuery,
   useGetAuthorDetailsQuery,

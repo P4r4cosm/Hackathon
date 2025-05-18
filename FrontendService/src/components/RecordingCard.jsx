@@ -14,7 +14,7 @@ const RecordingCard = ({ recording, isPlaying, activeSong, data, i }) => {
 
   const handlePlayClick = () => {
     // Подготавливаем объект song с поддержкой обоих форматов - нашего и стандартного формата плеера
-    const audioPath = recording.originalAudioUrl || recording.audioPath;
+    const audioPath = recording.filePath || recording.originalAudioUrl;
     const songWithAudioPath = {
       ...recording,
       audioPath,
@@ -43,25 +43,33 @@ const RecordingCard = ({ recording, isPlaying, activeSong, data, i }) => {
             handlePlay={handlePlayClick}
           />
         </div>
-        <img alt="song_img" src={recording.coverImage || 'https://via.placeholder.com/400?text=Военная+запись'} className="w-full h-full rounded-lg" />
+        <img 
+          alt="recording_img" 
+          src={recording.coverImage || 'https://via.placeholder.com/400?text=Военная+запись'} 
+          className="w-full h-full rounded-lg" 
+        />
       </div>
 
       <div className="mt-4 flex flex-col">
         <p className="font-semibold text-lg text-white truncate">
-          <Link to={`/recordings/${recording.id}`}>
-            {recording.title}
+          <Link to={`/track/${recording.id}`}>
+            {recording.title || 'Без названия'}
           </Link>
         </p>
         <p className="text-sm truncate text-gray-300 mt-1">
-          <Link to={`/authors/${recording.authorId}`}>
-            {recording.author}
-          </Link>
+          {recording.authorId ? (
+            <Link to={`/authors/${recording.authorId}`}>
+              {recording.author || 'Неизвестный автор'}
+            </Link>
+          ) : (
+            <span>{recording.author || 'Неизвестный автор'}</span>
+          )}
         </p>
         <div className="flex flex-wrap mt-2">
           {recording.tags?.map((tag) => (
             <Link
               key={`tag-${tag.id}`}
-              to={`/tag/${tag.id}`}
+              to={`/tracks?tag=${tag.id}`}
               className="text-xs mr-2 mb-1 py-1 px-2 bg-black/30 text-gray-300 rounded-full"
             >
               {tag.name}
@@ -69,7 +77,7 @@ const RecordingCard = ({ recording, isPlaying, activeSong, data, i }) => {
           ))}
         </div>
         <p className="text-xs text-gray-400 mt-1">
-          {recording.year}
+          {recording.year || 'Год неизвестен'}
         </p>
       </div>
     </div>
