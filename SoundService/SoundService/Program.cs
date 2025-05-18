@@ -1,5 +1,6 @@
 
 using DotNetEnv;
+using Microsoft.OpenApi.Models;
 using SoundService.Extensions;
 using SoundService.Models.Settings;
 using SoundService.Repositories;
@@ -74,7 +75,10 @@ var services = builder.Services;
 //подключаем сервисы
 services.AddApplicationDbContext(connectionString);
 services.AddControllers();
-services.AddSwaggerGen();
+services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("sound-v1", new OpenApiInfo { Title = "SoundService", Version = "v1" });
+});
 services.AddScoped<AudioMetadataService>();
 services.AddOpenApi();
 services.AddScoped<DbSeederService>();
@@ -93,7 +97,7 @@ using (var scope = app.Services.CreateScope())
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
-    options.SwaggerEndpoint("/swagger/v1/swagger.json", "SoundService v1");
+    options.SwaggerEndpoint("/swagger/sound-v1/swagger.json", "SoundService v1");
     options.RoutePrefix = ""; // Доступ по /
 });
 // Configure the HTTP request pipeline.
