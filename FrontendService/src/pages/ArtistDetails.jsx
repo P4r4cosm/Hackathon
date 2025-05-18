@@ -1,34 +1,76 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { DetailsHeader, Error, Loader, RelatedSongs } from '../components';
 
-import { useGetArtistDetailsQuery } from '../redux/services/shazamCore';
+import { useGetAuthorDetailsQuery, useGetRecordingsByAuthorQuery } from '../redux/services/audioArchiveApi';
+import { setActiveSong, playPause } from '../redux/features/playerSlice';
 
-const ArtistDetails = () => {
-  const { id: artistId } = useParams();
+const AuthorDetails = () => {
+  const dispatch = useDispatch();
+  const { authorId } = useParams();
   const { activeSong, isPlaying } = useSelector((state) => state.player);
-  const { data: artistData, isFetching: isFetchingArtistDetails, error } = useGetArtistDetailsQuery(artistId);
+  
+  const { data: authorData, isFetching: isFetchingAuthorDetails, error: authorError } = useGetAuthorDetailsQuery(authorId);
+  const { data: authorRecordings, isFetching: isFetchingRecordings, error: recordingsError } = useGetRecordingsByAuthorQuery(authorId);
 
-  if (isFetchingArtistDetails) return <Loader title="Loading artist details..." />;
+  if (isFetchingAuthorDetails || isFetchingRecordings) 
+    return <Loader title="Загрузка информации об авторе..." />;
 
-  if (error) return <Error />;
+  if (authorError || recordingsError) return <Error />;
+
+  const handlePauseClick = () => {
+    dispatch(playPause(false));
+  };
+
+  const handlePlayClick = (recording, i) => {
+    const songWithAudioPath = {
+      ...recording,
+      audioPath: recording.originalAudioUrl,
+      hub: { 
+        actions: [
+          { type: 'applemusicplay' }, 
+          { uri: recording.originalAudioUrl } 
+        ]
+      }
+    };
+    
+    dispatch(setActiveSong({ song: songWithAudioPath, data: authorRecordings, i }));
+    dispatch(playPause(true));
+  };
 
   return (
     <div className="flex flex-col">
       <DetailsHeader
-        artistId={artistId}
-        artistData={artistData?.data[0]}
+        artistId={authorId}
+        artistData={authorData}
       />
 
-      <RelatedSongs
-        data={artistData?.data[0].views['top-songs']?.data}
-        artistId={artistId}
-        isPlaying={isPlaying}
-        activeSong={activeSong}
-      />
+      <div className="mb-10">
+        <h2 className="text-white text-3xl font-bold">Биография:</h2>
+        <p className="text-gray-400 mt-5">
+          {authorData?.biography || 'Биография отсутствует'}
+        </p>
+      </div>
+
+      <div className="flex flex-col">
+        <h2 className="text-white text-3xl font-bold">Записи автора:</h2>
+        <div className="mt-6">
+          {authorRecordings?.length > 0 ? (
+            <RelatedSongs
+              data={authorRecordings}
+              isPlaying={isPlaying}
+              activeSong={activeSong}
+              handlePauseClick={handlePauseClick}
+              handlePlayClick={handlePlayClick}
+            />
+          ) : (
+            <p className="text-gray-400 text-base my-1">Записи не найдены</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
 
-export default ArtistDetails; 
+export default AuthorDetails; 

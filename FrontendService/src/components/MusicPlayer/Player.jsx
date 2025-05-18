@@ -20,9 +20,17 @@ const Player = ({ activeSong, isPlaying, volume, seekTime, onEnded, onTimeUpdate
     ref.current.currentTime = seekTime;
   }, [seekTime]);
 
+  // Получаем URL через SoundService API
+  const audioPath = activeSong?.audioPath || activeSong?.hub?.actions[1]?.uri;
+  const audioSrc = audioPath ? 
+    (audioPath.startsWith('http') ? 
+      audioPath : 
+      `http://localhost:8000/api/audio/download?path=${encodeURIComponent(audioPath)}`) 
+    : '';
+
   return (
     <audio
-      src={activeSong?.hub?.actions[1]?.uri}
+      src={audioSrc}
       ref={ref}
       loop={repeat}
       onEnded={onEnded}

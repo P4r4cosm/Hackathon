@@ -9,6 +9,17 @@ const DualAudioPlayer = ({
   onTimeUpdate,
   syncPlayers = true
 }) => {
+  // Преобразование URL для прохождения через SoundService API
+  const getProperAudioUrl = (url) => {
+    if (!url) return '';
+    return url.startsWith('http') 
+      ? url 
+      : `http://localhost:8000/api/audio/download?path=${encodeURIComponent(url)}`;
+  };
+
+  const processedOriginalUrl = getProperAudioUrl(originalUrl);
+  const processedRestoredUrl = getProperAudioUrl(restoredUrl);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -219,7 +230,7 @@ const DualAudioPlayer = ({
       {/* Скрытые аудио-элементы */}
       <audio
         ref={originalAudioRef}
-        src={originalUrl}
+        src={processedOriginalUrl}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={() => setIsPlaying(false)}
@@ -228,7 +239,7 @@ const DualAudioPlayer = ({
       
       <audio
         ref={restoredAudioRef}
-        src={restoredUrl}
+        src={processedRestoredUrl}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={() => setIsPlaying(false)}

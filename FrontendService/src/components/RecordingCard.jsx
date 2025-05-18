@@ -13,7 +13,21 @@ const RecordingCard = ({ recording, isPlaying, activeSong, data, i }) => {
   };
 
   const handlePlayClick = () => {
-    dispatch(setActiveSong({ song: recording, data, i }));
+    // Подготавливаем объект song с поддержкой обоих форматов - нашего и стандартного формата плеера
+    const audioPath = recording.originalAudioUrl || recording.audioPath;
+    const songWithAudioPath = {
+      ...recording,
+      audioPath,
+      // Создаем совместимость со старым форматом для плеера
+      hub: { 
+        actions: [
+          { type: 'applemusicplay' }, 
+          { uri: audioPath } 
+        ]
+      }
+    };
+    
+    dispatch(setActiveSong({ song: songWithAudioPath, data, i }));
     dispatch(playPause(true));
   };
 

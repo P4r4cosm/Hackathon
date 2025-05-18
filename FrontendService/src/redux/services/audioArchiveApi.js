@@ -65,11 +65,20 @@ export const audioArchiveApi = createApi({
     // Загрузка новой записи
     uploadRecording: builder.mutation({
       query: (formData) => ({
-        url: 'recordings',
+        url: 'audio/upload',
         method: 'POST',
         body: formData,
       }),
       invalidatesTags: ['Recording'],
+    }),
+    
+    // Скачивание аудиофайла (позволяет получить blob)
+    downloadAudio: builder.query({
+      query: (path) => ({
+        url: `audio/download`,
+        params: { path },
+        responseHandler: (response) => response.blob(),
+      }),
     }),
     
     // Обновление метаданных записи
@@ -120,4 +129,5 @@ export const {
   useUpdateRecordingMutation,
   useUpdateTranscriptionMutation,
   useManageTagMutation,
+  useDownloadAudioQuery,
 } = audioArchiveApi; 

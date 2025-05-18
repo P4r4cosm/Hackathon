@@ -3,9 +3,9 @@ import { Route, Routes } from 'react-router-dom';
 
 import { Searchbar, Sidebar, MusicPlayer, TopPlay } from './components';
 import { 
-  ArtistDetails, 
+  AuthorDetails, 
   TopArtists, 
-  AroundYou, 
+  RecordingsByYear, 
   Discover, 
   Search, 
   SongDetails, 
@@ -32,17 +32,19 @@ const App = () => {
               <Route path="/discover" element={<Discover />} />
               <Route path="/top-artists" element={<TopArtists />} />
               <Route path="/top-charts" element={<TopCharts />} />
-              <Route path="/around-you" element={<AroundYou />} />
-              <Route path="/artists/:id" element={<ArtistDetails />} />
-              <Route path="/songs/:songid" element={<SongDetails />} />
+              <Route path="/around-you" element={<RecordingsByYear />} />
+              
+              {/* Обновленные маршруты для использования с нашим API */}
+              <Route path="/songs/:songid" element={<RecordingDetails />} />
+              <Route path="/artists/:id" element={<AuthorDetails />} />
               <Route path="/search/:searchTerm" element={<Search />} />
               
-              {/* Новые маршруты для архива военных записей */}
+              {/* Маршруты для архива военных записей */}
               <Route path="/archive" element={<ArchiveExplorer />} />
               <Route path="/recordings/:recordingId" element={<RecordingDetails />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/upload" element={<UploadForm />} />
-              <Route path="/authors/:authorId" element={<ArtistDetails />} />
+              <Route path="/authors/:authorId" element={<AuthorDetails />} />
               <Route path="/tag/:tagId" element={<ArchiveExplorer />} />
             </Routes>
           </div>

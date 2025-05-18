@@ -1,46 +1,78 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useSelector } from 'react-redux';
 
-import { Error, Loader, SongCard } from '../components';
-import { useGetSongsByCountryQuery } from '../redux/services/shazamCore';
+import { Error, Loader, RecordingCard } from '../components';
+import { useGetAllRecordingsQuery } from '../redux/services/audioArchiveApi';
 
-const CountryTracks = () => {
-  const [country, setCountry] = useState('');
-  const [loading, setLoading] = useState(true);
+const RecordingsByYear = () => {
+  const [selectedYear, setSelectedYear] = useState('');
   const { activeSong, isPlaying } = useSelector((state) => state.player);
-  const { data, isFetching, error } = useGetSongsByCountryQuery(country);
-
+  const { data: allRecordings, isFetching, error } = useGetAllRecordingsQuery();
+  const [filteredRecordings, setFilteredRecordings] = useState([]);
+  
+  // Список доступных годов для выбора (от 1941 до 1945)
+  const availableYears = ['1941', '1942', '1943', '1944', '1945'];
+  
   useEffect(() => {
-    axios
-      .get(`https://geo.ipify.org/api/v2/country?apiKey=${import.meta.env.VITE_GEO_API_KEY}`)
-      .then((res) => setCountry(res?.data?.location.country))
-      .catch((err) => console.log(err))
-      .finally(() => setLoading(false));
-  }, [country]);
+    if (allRecordings) {
+      if (selectedYear) {
+        setFilteredRecordings(allRecordings.filter(recording => 
+          recording.year && recording.year.toString() === selectedYear
+        ));
+      } else {
+        // Если год не выбран, показываем записи военных лет
+        setFilteredRecordings(allRecordings.filter(recording => 
+          recording.year && recording.year >= 1941 && recording.year <= 1945
+        ));
+      }
+    }
+  }, [allRecordings, selectedYear]);
 
-  if (isFetching && loading) return <Loader title="Loading Songs around you..." />;
+  const handleYearChange = (e) => {
+    setSelectedYear(e.target.value);
+  };
 
-  if (error && country !== '') return <Error />;
+  if (isFetching) return <Loader title="Загрузка записей..." />;
+
+  if (error) return <Error />;
 
   return (
     <div className="flex flex-col">
-      <h2 className="font-bold text-3xl text-white text-left mt-4 mb-10">Around you <span className="font-black">{country}</span></h2>
+      <div className="flex flex-row justify-between items-center">
+        <h2 className="font-bold text-3xl text-white text-left mt-4 mb-10">
+          Записи {selectedYear ? `${selectedYear} года` : 'военных лет'}
+        </h2>
+        
+        <select
+          onChange={handleYearChange}
+          value={selectedYear}
+          className="bg-black text-gray-300 p-3 text-sm rounded-lg outline-none sm:mt-0 mt-5"
+        >
+          <option value="">Все военные годы</option>
+          {availableYears.map((year) => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </select>
+      </div>
 
       <div className="flex flex-wrap sm:justify-start justify-center gap-8">
-        {data?.map((song, i) => (
-          <SongCard
-            key={song.key}
-            song={song}
-            isPlaying={isPlaying}
-            activeSong={activeSong}
-            data={data}
-            i={i}
-          />
-        ))}
+        {filteredRecordings.length > 0 ? (
+          filteredRecordings.map((recording, i) => (
+            <RecordingCard
+              key={recording.id}
+              recording={recording}
+              isPlaying={isPlaying}
+              activeSong={activeSong}
+              data={filteredRecordings}
+              i={i}
+            />
+          ))
+        ) : (
+          <p className="text-white text-xl">Не найдено записей для выбранного года</p>
+        )}
       </div>
     </div>
   );
 };
 
-export default CountryTracks; 
+export default RecordingsByYear; 
