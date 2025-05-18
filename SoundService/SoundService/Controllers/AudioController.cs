@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Reflection.PortableExecutable;
+using Microsoft.AspNetCore.Mvc;
 using SoundService.Models;
 using SoundService.Repositories;
 using SoundService.Services;
@@ -46,7 +47,8 @@ public class AudioController : ControllerBase
         try
         {
             //достаём метаданные
-            var metadata = await _audioMetadataService.CreateAudioRecordFromMetadata(tempFilePath, file.FileName, filePathInMinio);
+            var metadata =
+                await _audioMetadataService.CreateAudioRecordFromMetadata(tempFilePath, file.FileName, filePathInMinio);
             _logger.LogInformation("Metadata: {Metadata}", metadata);
 
             //забрасываем трек в сервис, улучшающий звук
@@ -102,7 +104,6 @@ public class AudioController : ControllerBase
 
         try
         {
-
             (Stream fileStream, string contentType, long contentLength) =
                 await _minIOService.GetTrackAsync(path, cancellationToken);
 
@@ -112,14 +113,14 @@ public class AudioController : ControllerBase
 
             return new FileStreamResult(fileStream, contentType ?? "application/octet-stream")
             {
-                FileDownloadName = downloadFileName, 
+                FileDownloadName = downloadFileName,
                 EnableRangeProcessing = true
             };
         }
         catch (FileNotFoundException ex)
         {
             _logger.LogWarning(ex, "MinIO object not found: {ObjectName}", path);
-            return NotFound(ex.Message); 
+            return NotFound(ex.Message);
         }
         catch (Minio.Exceptions.MinioException minioEx)
         {
@@ -131,5 +132,26 @@ public class AudioController : ControllerBase
             _logger.LogError(ex, "Error streaming object: {ObjectName}", path);
             return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while streaming the file.");
         }
+    }
+
+    [HttpGet("tracks")]
+    public async Task<IActionResult> GetAllTracks()
+    {
+        var audioList = await _audioRecordRepository.GetAllAsync();
+        return Ok(audioList);
+    }
+
+    [HttpGet("track/{id}")]
+    public async Task<IActionResult> GetTrackById(int id)
+    {
+        var audio = await _audioRecordRepository.GetTrackTextByIdAsync(id);
+        return Ok(audio);
+    }
+
+    [HttpGet("track_text/{id}")]
+    public async Task<IActionResult> GetTrackTextById(int id)
+    {
+        var audioElastic = await _audioRecordRepository.GetTrackTextByIdAsync(id);
+        return Ok(audioElastic);
     }
 }

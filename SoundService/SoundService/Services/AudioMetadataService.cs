@@ -14,7 +14,7 @@ public class AudioMetadataService
         _context = context;
     }
 
-    public async Task<AudioRecord> CreateAudioRecordFromMetadata(string filePath, string fileName, string pathInMinio)
+    public async Task<AudioRecord?> CreateAudioRecordFromMetadata(string filePath, string fileName, string pathInMinio)
     {
         var file = TagLib.File.Create(filePath);
 
