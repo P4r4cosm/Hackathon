@@ -12,6 +12,11 @@ services:
       - "5432:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   authservice:
     build:
@@ -55,8 +60,13 @@ services:
     volumes:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
+<<<<<<< Updated upstream
       - postgres
 
+=======
+      postgres:
+        condition: service_healthy
+>>>>>>> Stashed changes
 
   gateway:
     build:
@@ -89,7 +99,8 @@ services:
     volumes:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
-      - authservice
+      authservice:
+        condition: service_started
 
   frontend:
     build:
