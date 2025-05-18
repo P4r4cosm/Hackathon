@@ -42,7 +42,6 @@ artifacts/
 *.vsix
 
 # Visual Studio files
-=======
 # Секреты
 .env
 
@@ -140,7 +139,6 @@ yarn-error.log*
 *.mdf
 *.ldf
 *.ndf 
-=======
 
 ## Игнорировать файлы блокировки зависимостей (NuGet) ##
 project.lock.json
@@ -215,3 +213,9 @@ docker-compose.override.yml
 ## Игнорировать специфичные для Build server файлы (опционально) ##
 # **/packages.config # Если используется старый формат пакетов
 # NuGet.exe # Если он вдруг попал в репозиторий
+data/postgres/
+*.db
+*.sqlite
+*.sql
+INTEGRATION/
+
