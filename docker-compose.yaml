@@ -12,6 +12,11 @@ services:
       - "5432:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   authservice:
     build:
@@ -19,10 +24,10 @@ services:
       dockerfile: AuthService/Dockerfile # Путь к Dockerfile вашего сервиса
     env_file:
       - .env 
+    container_name: AuthService
     ports:
       - "8012:80"   # Хост 8012 -> Контейнер 80 (HTTP)
       - "8011:443"  # Хост 8011 -> Контейнер 443 (HTTPS)
-    container_name: AuthService
     environment:
       - ASPNETCORE_ENVIRONMENT=Development # Или Development, как вам нужно
       - POSTGRES_HOST=postgres
@@ -46,7 +51,6 @@ services:
       - AllowedOrigins__4=http://authservicefrontend
       - AllowedOrigins__5=http://frontend
       - AllowedOrigins__6=http://gateway
-       # Настройки для HTTPS
     volumes:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
@@ -79,7 +83,6 @@ services:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
       - authservice
-    
   soundservice:
     build:
       context: .
@@ -106,7 +109,6 @@ services:
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
       - ELASTIC_URI=${ELASTIC_URI}
-
   frontend:
     build:
       context: . # Контекст сборки - корень проекта
@@ -125,10 +127,12 @@ services:
     restart: always
     ports:
       - "3010:80"   # Хост 3010 -> Контейнер 80 (HTTP)
+    environment:
+      - ASPNETCORE_URLS=http://+:80;https://+:443 # Kestrel будет слушать оба порта
+      - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD} # Ссылка на переменную из .env
     depends_on:
       - authservice
       - gateway
-
   elasticsearch:
     image: elasticsearch:8.17.3
     container_name: elastic
