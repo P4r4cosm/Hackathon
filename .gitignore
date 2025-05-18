@@ -212,3 +212,8 @@ docker-compose.override.yml
 ## Игнорировать специфичные для Build server файлы (опционально) ##
 # **/packages.config # Если используется старый формат пакетов
 # NuGet.exe # Если он вдруг попал в репозиторий
+data/postgres/
+*.db
+*.sqlite
+*.sql
+data/
