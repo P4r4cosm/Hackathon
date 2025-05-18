@@ -1,4 +1,4 @@
-
+INTEGRATION/
 # .NET Core
 bin/
 obj/
@@ -48,7 +48,8 @@ artifacts/
 # Данные и логи
 /data/
 /logs/
-
+/tracks
+/music_test
 /bin
 
 # IDE / editor files
@@ -57,6 +58,8 @@ artifacts/
 *.iml
 *.swp
 
+*.rar
+*.zip
 
 # --- .NET / ASP.NET Core ---
 
