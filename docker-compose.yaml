@@ -116,6 +116,9 @@ services:
       - "3000:80"   # Хост 3000 -> Контейнер 80 (HTTP)
     depends_on:
       - gateway
+      - postgres
+      - elasticsearch
+      - minio
 
   authservicefrontend:
     build:
