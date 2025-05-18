@@ -10,7 +10,7 @@ public class ApplicationDbContext : DbContext
     {
        // Database.EnsureCreated();
     }
-    public DbSet<AudioRecord> AudioRecords { get; set; }
+    public DbSet<AudioRecord?> AudioRecords { get; set; }
     public DbSet<Author> Authors { get; set; }
     public DbSet<Album> Albums { get; set; }
     public DbSet<Genre> Genres { get; set; }
