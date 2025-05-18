@@ -14,7 +14,7 @@ public class AudioMetadataService
         _context = context;
     }
 
-    public async Task<AudioRecord> CreateAudioRecordFromMetadata(string filePath, string fileName)
+    public async Task<AudioRecord> CreateAudioRecordFromMetadata(string filePath, string fileName, string pathInMinio)
     {
         var file = TagLib.File.Create(filePath);
 
@@ -25,25 +25,26 @@ public class AudioMetadataService
                      ?? new Author { Name = authorName };
 
         // Проверка, добавлен ли автор в контекст (если он новый)
-        if (author.Id == Guid.Empty)
+        if (author.Id == 0)
         {
             _context.Authors.Add(author);
             await _context.SaveChangesAsync(); // Убедимся, что у нового автора есть ID
         }
 
-        // Поиск или создание альбома
+        // Поиск или создание альбома 
         var albumTitle = file.Tag.Album ?? "Unknown Album";
         var album = await _context.Albums
-                        .FirstOrDefaultAsync(a => a.Title == albumTitle && a.AuthorId == author.Id) 
-                    ?? new Album 
-                    { 
+                        .FirstOrDefaultAsync(a => a.Title == albumTitle && a.AuthorId == author.Id)
+                    ?? new Album
+                    {
                         Title = albumTitle,
                         AuthorId = author.Id, // Привязка по внешнему ключу
-                        Author = author       // Навигационное свойство
+                        Author = author,
+                        Year = (int)file.Tag.Year// Навигационное свойство
                     };
 
         // Проверка, добавлен ли альбом в контекст (если он новый)
-        if (album.Id == Guid.Empty)
+        if (album.Id == 0)
         {
             _context.Albums.Add(album);
             await _context.SaveChangesAsync(); // Сохранение нового альбома
@@ -55,20 +56,21 @@ public class AudioMetadataService
                         .FirstOrDefaultAsync(g => g.Name == genreName)
                     ?? new Genre { Name = genreName };
 
-        if (genre.Id == Guid.Empty)
+        if (genre.Id == 0)
         {
             _context.Genres.Add(genre);
             await _context.SaveChangesAsync();
         }
-
         var audioRecord = new AudioRecord
         {
             Title = file.Tag.Title ?? Path.GetFileNameWithoutExtension(fileName),
-            FilePath = filePath,
+            FilePath = pathInMinio,
             ModerationStatus = new ModerationStatus(){State = ModerationState.Pending},
+            Year = (int)file.Tag.Year,
             Author = author,
             Album = album,
             Genre = genre,
+            Duration = file.Properties.Duration,
             AudioKeywords = new List<AudioKeyword>(), 
             AudioThematicTags = new List<AudioThematicTag>()
         };

@@ -2,16 +2,16 @@
 
 public class AudioRecord
 {
-    public Guid Id { get; set; }
+    public int Id { get; set; }
     public string Title { get; set; }                // Название песни
-    public Guid AuthorId { get; set; }               // Внешний ключ на Author
+    public int AuthorId { get; set; }               // Внешний ключ на Author
     public Author Author { get; set; }
 
-    public Guid? AlbumId { get; set; }
+    public int? AlbumId { get; set; }
     public Album Album { get; set; }
 
     public int? Year { get; set; }
-    public Guid GenreId { get; set; }
+    public int GenreId { get; set; }
     public  Genre Genre { get; set; }
 
     public TimeSpan Duration { get; set; }

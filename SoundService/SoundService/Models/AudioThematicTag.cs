@@ -2,9 +2,9 @@
 
 public class AudioThematicTag
 {
-    public Guid AudioRecordId { get; set; }
+    public int AudioRecordId { get; set; }
     public AudioRecord AudioRecord { get; set; }
 
-    public Guid ThematicTagId { get; set; }
+    public int ThematicTagId { get; set; }
     public ThematicTag ThematicTag { get; set; }
 }

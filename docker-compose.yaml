@@ -79,6 +79,33 @@ services:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
       - authservice
+    
+  soundservice:
+    build:
+      context: .
+      dockerfile: SoundService/SoundService/Dockerfile
+    env_file:
+      - .env
+    container_name: SoundService
+    ports: 
+      - "8020:80"
+      #- "8021:443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development 
+      # Настройки для HTTPS
+      - ASPNETCORE_URLS=http://+:80; #https://+:443
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - ROLES=${ROLES}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - ELASTIC_URI=${ELASTIC_URI}
 
   frontend:
     build:
