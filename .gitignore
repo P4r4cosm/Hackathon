@@ -42,7 +42,6 @@ artifacts/
 *.vsix
 
 # Visual Studio files
-=======
 # Секреты
 .env
 
@@ -137,7 +136,6 @@ yarn-error.log*
 *.mdf
 *.ldf
 *.ndf 
-=======
 
 ## Игнорировать файлы блокировки зависимостей (NuGet) ##
 project.lock.json
@@ -216,9 +214,5 @@ data/postgres/
 *.db
 *.sqlite
 *.sql
-data/
-data/
 INTEGRATION/
-data/
-INTEGRATION/
-INTEGRATION/
+
