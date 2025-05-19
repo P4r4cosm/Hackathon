@@ -65,15 +65,24 @@ public static class AuthorizationExtensions
             .AddCookie(options =>
             {
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-                //options.LoginPath = "/api/Auth/LoginByName"; // Или ваша страница логина, если есть UI
-                //options.LogoutPath = "/api/Auth/Logout";
-                //options.AccessDeniedPath = "/Account/AccessDenied"; // Страница "доступ запрещен"
+                options.Events = new CookieAuthenticationEvents
+                {
+                    OnRedirectToLogin = context =>
+                    {
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        return Task.CompletedTask;
+                    },
+                    OnRedirectToAccessDenied = context =>
+                    {
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        return Task.CompletedTask;
+                    }
+                };
             })
             .AddGoogle(options =>
             {
                 options.ClientId = configuration["Authentication:Google:ClientId"];
                 options.ClientSecret = configuration["Authentication:Google:ClientSecret"];
-                options.SignInScheme = IdentityConstants.ExternalScheme;
                 options.CallbackPath = "/signin-google";
             })
             .AddJwtBearer(options =>

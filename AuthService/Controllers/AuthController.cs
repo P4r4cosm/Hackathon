@@ -3,8 +3,11 @@ using System.Security.Claims;
 using System.Text;
 using AuthService.Models;
 using AuthService.Models.DTO;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace AuthService.Controllers;
@@ -17,6 +20,7 @@ public class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthController> _logger;
+    private readonly IOptionsMonitor<GoogleOptions> _googleOptionsMonitor;
 
     public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager,
         IConfiguration configuration, ILogger<AuthController> logger)
@@ -95,29 +99,35 @@ public class AuthController : ControllerBase
         return Unauthorized(new { Message = "Invalid credentials" });
     }
 
-    [HttpGet("google-login")] // Изменил маршрут для ясности
+    [HttpGet("google-login")]
     public IActionResult GoogleLogin(string? returnUrl = null)
     {
-        returnUrl = "http://localhost:3000/"; // значение по умолчанию
-        var redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Auth", new { returnUrl });
-        var properties = _signInManager.ConfigureExternalAuthenticationProperties("Google", redirectUrl);
-        return Challenge(properties, "Google");
+        var redirectUrlAfterAuthServiceProcessing =
+            returnUrl ?? Url.Content("~/"); // URL для редиректа ПОСЛЕ обработки в ExternalLoginCallback
+
+        _logger.LogInformation(
+            "Initiating Google login. Apparent Request Scheme: {Scheme}, Apparent Request Host: {Host}. Redirect after processing: {ReturnUrl}",
+            Request.Scheme, Request.Host.ToString(), redirectUrlAfterAuthServiceProcessing);
+
+        var properties = new AuthenticationProperties { RedirectUri = "http://localhost:3000" };
+        return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
 
     [HttpGet("external-login-callback")]
     public async Task<IActionResult> ExternalLoginCallback(string? returnUrl = null)
     {
-        returnUrl ??= Url.Content("~/"); // По умолчанию на главную, если returnUrl не указан
+        returnUrl ??=
+            Url.Content(
+                "~/"); // По умолчанию на главную authservice, если returnUrl не указан в AuthenticationProperties
 
         var info = await _signInManager.GetExternalLoginInfoAsync();
         if (info == null)
         {
-            _logger.LogWarning("Error loading external login information.");
-            // Можно перенаправить на страницу ошибки или снова на логин
-            return RedirectToAction(nameof(LoginByName)); // Или какой-то общий метод логина
+            _logger.LogWarning("Error loading external login information. Redirecting to: {ReturnUrl}", returnUrl);
+            // Здесь лучше перенаправить на страницу ошибки на фронтенде или на страницу логина фронтенда
+            return Redirect(returnUrl); // Или на специальную страницу ошибки
         }
 
-        // Пытаемся войти с помощью внешнего провайдера (например, если пользователь уже привязывал Google)
         var signInResult = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey,
             isPersistent: false, bypassTwoFactor: true);
 
@@ -133,67 +143,59 @@ public class AuthController : ControllerBase
             }
             else
             {
-                // Этого не должно произойти, если ExternalLoginSignInAsync успешен
                 _logger.LogError("External login succeeded but user not found for {LoginProvider} and {ProviderKey}.",
                     info.LoginProvider, info.ProviderKey);
-                return BadRequest(new { Message = "Error during external login." });
+                // Можно перенаправить на страницу ошибки
+                return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") +
+                                "error=external_login_user_not_found");
             }
         }
         else
         {
-            // Если пользователь не имеет логина через этого провайдера, пытаемся его найти по email или создать
             var email = info.Principal.FindFirstValue(ClaimTypes.Email);
             if (email != null)
             {
                 user = await _userManager.FindByEmailAsync(email);
-                if (user == null) // Пользователя нет, создаем нового
+                if (user == null)
                 {
-                    var userName =
-                        info.Principal.FindFirstValue(ClaimTypes.Name) ??
-                        email; // Можно выбрать другую логику для UserName
-                    // Убедимся что UserName уникален, если он уже занят, можно добавить суффикс
+                    var userName = info.Principal.FindFirstValue(ClaimTypes.Name) ?? email;
                     var tempUser = await _userManager.FindByNameAsync(userName);
                     if (tempUser != null)
                     {
                         userName = $"{userName}_{Guid.NewGuid().ToString().Substring(0, 4)}";
                     }
 
-                    user = new ApplicationUser
-                    {
-                        UserName = userName,
-                        Email = email,
-                        EmailConfirmed = true // Email подтвержден провайдером
-                    };
+                    user = new ApplicationUser { UserName = userName, Email = email, EmailConfirmed = true };
                     var createUserResult = await _userManager.CreateAsync(user);
                     if (createUserResult.Succeeded)
                     {
                         _logger.LogInformation("New user {Email} created via {LoginProvider}.", email,
                             info.LoginProvider);
-                        await _userManager.AddToRoleAsync(user, "user"); // Назначаем роль
+                        await _userManager.AddToRoleAsync(user, "user");
                     }
                     else
                     {
                         _logger.LogError("Failed to create user {Email} via {LoginProvider}: {Errors}",
                             email, info.LoginProvider,
                             string.Join(", ", createUserResult.Errors.Select(e => e.Description)));
-                        return BadRequest(new { Message = "Error creating user.", Errors = createUserResult.Errors });
+                        return Redirect(
+                            returnUrl + (returnUrl.Contains("?") ? "&" : "?") + "error=user_creation_failed");
                     }
                 }
 
-                // Привязываем внешний логин к существующему или новому пользователю
                 var addLoginResult = await _userManager.AddLoginAsync(user, info);
                 if (addLoginResult.Succeeded)
                 {
                     _logger.LogInformation("External login {LoginProvider} added for user {Email}.", info.LoginProvider,
                         user.Email);
-                    // Повторно пытаемся войти, теперь логин должен быть привязан
                     signInResult = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey,
                         isPersistent: false, bypassTwoFactor: true);
                     if (!signInResult.Succeeded)
                     {
                         _logger.LogError("Failed to sign in user {Email} via {LoginProvider} after adding login.",
                             user.Email, info.LoginProvider);
-                        return BadRequest(new { Message = "Error during external sign-in after linking account." });
+                        return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") +
+                                        "error=signin_after_link_failed");
                     }
                 }
                 else
@@ -201,32 +203,30 @@ public class AuthController : ControllerBase
                     _logger.LogError("Failed to add external login {LoginProvider} for user {Email}: {Errors}",
                         info.LoginProvider, user.Email,
                         string.Join(", ", addLoginResult.Errors.Select(e => e.Description)));
-                    return BadRequest(new
-                        { Message = "Error linking external account.", Errors = addLoginResult.Errors });
+                    return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") + "error=link_external_failed");
                 }
             }
             else
             {
                 _logger.LogWarning("Email claim not found from {LoginProvider}.", info.LoginProvider);
-                return BadRequest(new { Message = "Email claim not found from external provider." });
+                return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") + "error=email_claim_not_found");
             }
         }
 
-        // На этом этапе пользователь (user) должен быть успешно залогинен (signInResult.Succeeded)
-        // и у нас должен быть объект user
-        if (user == null) // Дополнительная проверка
+        if (user == null)
         {
             _logger.LogError("User object is null after external login process for {LoginProvider} - {ProviderKey}.",
                 info.LoginProvider, info.ProviderKey);
-            return BadRequest(new { Message = "Critical error during external login." });
+            return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") + "error=critical_external_login_error");
         }
 
         var roles = await _userManager.GetRolesAsync(user);
         var token = GenerateJwtToken(user, roles);
         SetAuthCookie(token);
 
-        _logger.LogInformation("JWT token generated and cookie set for user {Email} after {LoginProvider} login.",
-            user.Email, info.LoginProvider);
+        _logger.LogInformation(
+            "JWT token generated and cookie set for user {Email} after {LoginProvider} login. Redirecting to {ReturnUrl}",
+            user.Email, info.LoginProvider, returnUrl);
         return Redirect(returnUrl);
     }
 
