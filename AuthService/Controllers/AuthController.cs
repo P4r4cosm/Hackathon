@@ -116,17 +116,24 @@ public class AuthController : ControllerBase
     [HttpGet("external-login-callback")]
     public async Task<IActionResult> ExternalLoginCallback(string? returnUrl = null)
     {
-        returnUrl ??=
-            Url.Content(
-                "~/"); // По умолчанию на главную authservice, если returnUrl не указан в AuthenticationProperties
+        // returnUrl здесь - это то, что было установлено в AuthenticationProperties.RedirectUri
+        // при вызове Challenge() в GoogleLogin или GitHubLogin. Это URL вашего фронтенда.
+        var frontendRedirectUrl = returnUrl ??
+                                  _configuration["FrontendDefaults:LoginSuccessRedirectUrl"] ??
+                                  "http://localhost:3000"; // URL фронтенда
 
         var info = await _signInManager.GetExternalLoginInfoAsync();
         if (info == null)
         {
-            _logger.LogWarning("Error loading external login information. Redirecting to: {ReturnUrl}", returnUrl);
-            // Здесь лучше перенаправить на страницу ошибки на фронтенде или на страницу логина фронтенда
-            return Redirect(returnUrl); // Или на специальную страницу ошибки
+            _logger.LogWarning(
+                "Error loading external login information. Redirecting to frontend: {FrontendRedirectUrl}",
+                frontendRedirectUrl);
+            return Redirect(frontendRedirectUrl + (frontendRedirectUrl.Contains("?") ? "&" : "?") +
+                            "error=external_login_info_error");
         }
+
+        _logger.LogInformation("External login callback for provider {LoginProvider}. User Principal Name: {Name}",
+            info.LoginProvider, info.Principal.Identity?.Name);
 
         var signInResult = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey,
             isPersistent: false, bypassTwoFactor: true);
@@ -139,15 +146,16 @@ public class AuthController : ControllerBase
             if (user != null)
             {
                 _logger.LogInformation("User {Email} logged in successfully via {LoginProvider}.",
-                    info.Principal.FindFirstValue(ClaimTypes.Email), info.LoginProvider);
+                    user.Email ?? info.Principal.FindFirstValue(ClaimTypes.Email),
+                    info.LoginProvider); // Логируем email пользователя
             }
             else
             {
+                // Этого не должно произойти, если ExternalLoginSignInAsync успешен
                 _logger.LogError("External login succeeded but user not found for {LoginProvider} and {ProviderKey}.",
                     info.LoginProvider, info.ProviderKey);
-                // Можно перенаправить на страницу ошибки
-                return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") +
-                                "error=external_login_user_not_found");
+                return Redirect(frontendRedirectUrl + (frontendRedirectUrl.Contains("?") ? "&" : "?") +
+                                "error=external_login_user_not_found_after_success");
             }
         }
         else
@@ -156,78 +164,119 @@ public class AuthController : ControllerBase
             if (email != null)
             {
                 user = await _userManager.FindByEmailAsync(email);
-                if (user == null)
+                if (user == null) // Пользователя с таким email нет, создаем нового
                 {
-                    var userName = info.Principal.FindFirstValue(ClaimTypes.Name) ?? email;
+                    // Для GitHub, ClaimTypes.Name обычно является логином GitHub.
+                    // Это хороший кандидат для UserName.
+                    var userName = info.Principal.FindFirstValue(ClaimTypes.Name) ?? // GitHub login
+                                   info.Principal.FindFirstValue("urn:github:login") ?? // Явный клейм для GitHub login
+                                   email.Split('@')[0]; // Запасной вариант
+
+                    // Обеспечиваем уникальность UserName
                     var tempUser = await _userManager.FindByNameAsync(userName);
                     if (tempUser != null)
                     {
+                        // Если такой UserName уже существует, добавляем суффикс
                         userName = $"{userName}_{Guid.NewGuid().ToString().Substring(0, 4)}";
                     }
 
-                    user = new ApplicationUser { UserName = userName, Email = email, EmailConfirmed = true };
+                    user = new ApplicationUser
+                    {
+                        UserName = userName, Email = email, EmailConfirmed = true
+                    }; // EmailConfirmed = true для внешних провайдеров
                     var createUserResult = await _userManager.CreateAsync(user);
                     if (createUserResult.Succeeded)
                     {
-                        _logger.LogInformation("New user {Email} created via {LoginProvider}.", email,
-                            info.LoginProvider);
-                        await _userManager.AddToRoleAsync(user, "user");
+                        _logger.LogInformation(
+                            "New user {Email} created via {LoginProvider}. Assigned UserName: {UserName}",
+                            email, info.LoginProvider, user.UserName);
+                        await _userManager.AddToRoleAsync(user, "user"); // Назначаем роль по умолчанию
                     }
                     else
                     {
                         _logger.LogError("Failed to create user {Email} via {LoginProvider}: {Errors}",
                             email, info.LoginProvider,
                             string.Join(", ", createUserResult.Errors.Select(e => e.Description)));
-                        return Redirect(
-                            returnUrl + (returnUrl.Contains("?") ? "&" : "?") + "error=user_creation_failed");
+                        var errorDescriptions = string.Join(";", createUserResult.Errors.Select(e => e.Description));
+                        return Redirect(frontendRedirectUrl + (frontendRedirectUrl.Contains("?") ? "&" : "?") +
+                                        $"error=user_creation_failed&details={Uri.EscapeDataString(errorDescriptions)}");
                     }
                 }
 
+                // Пользователь с таким email существует, привязываем внешний логин
                 var addLoginResult = await _userManager.AddLoginAsync(user, info);
                 if (addLoginResult.Succeeded)
                 {
-                    _logger.LogInformation("External login {LoginProvider} added for user {Email}.", info.LoginProvider,
-                        user.Email);
+                    _logger.LogInformation("External login {LoginProvider} added for existing user {Email}.",
+                        info.LoginProvider, user.Email);
+                    // Пытаемся войти пользователя снова после привязки
                     signInResult = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey,
                         isPersistent: false, bypassTwoFactor: true);
+
                     if (!signInResult.Succeeded)
                     {
-                        _logger.LogError("Failed to sign in user {Email} via {LoginProvider} after adding login.",
-                            user.Email, info.LoginProvider);
-                        return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") +
+                        _logger.LogError(
+                            "Failed to sign in user {Email} via {LoginProvider} after adding login. SignInResult: {SignInResult}",
+                            user.Email, info.LoginProvider, signInResult.ToString());
+                        // Это может произойти, если, например, пользователь заблокирован или требует двухфакторную аутентификацию,
+                        // которую мы обходим с bypassTwoFactor: true. Но для свежепривязанного логина это маловероятно.
+                        return Redirect(frontendRedirectUrl + (frontendRedirectUrl.Contains("?") ? "&" : "?") +
                                         "error=signin_after_link_failed");
                     }
+                    // Если вход успешен после привязки, user уже должен быть загружен (FindByNameAsync или FindByLoginAsync)
+                    // на предыдущем шаге, если signInResult был Succeeded. Но если мы только что создали user, то он уже есть.
+                    // Если мы привязали к существующему user, он тоже есть.
                 }
                 else
                 {
                     _logger.LogError("Failed to add external login {LoginProvider} for user {Email}: {Errors}",
                         info.LoginProvider, user.Email,
                         string.Join(", ", addLoginResult.Errors.Select(e => e.Description)));
-                    return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") + "error=link_external_failed");
+                    var errorDescriptions = string.Join(";", addLoginResult.Errors.Select(e => e.Description));
+                    return Redirect(frontendRedirectUrl + (frontendRedirectUrl.Contains("?") ? "&" : "?") +
+                                    $"error=link_external_failed&details={Uri.EscapeDataString(errorDescriptions)}");
                 }
             }
-            else
+            else // Email не получен от внешнего провайдера
             {
-                _logger.LogWarning("Email claim not found from {LoginProvider}.", info.LoginProvider);
-                return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") + "error=email_claim_not_found");
+                _logger.LogWarning("Email claim not found from {LoginProvider}. User Principal Name: {NameIdentifier}",
+                    info.LoginProvider, info.Principal.FindFirstValue(ClaimTypes.NameIdentifier));
+                // Это критическая ситуация, если email обязателен.
+                // Можно попробовать использовать NameIdentifier для поиска/создания пользователя,
+                // но это менее надежно, чем email.
+                return Redirect(frontendRedirectUrl + (frontendRedirectUrl.Contains("?") ? "&" : "?") +
+                                "error=email_claim_not_found_from_provider");
             }
         }
 
-        if (user == null)
+        if (user == null) // Дополнительная проверка, если user не был установлен
         {
-            _logger.LogError("User object is null after external login process for {LoginProvider} - {ProviderKey}.",
-                info.LoginProvider, info.ProviderKey);
-            return Redirect(returnUrl + (returnUrl.Contains("?") ? "&" : "?") + "error=critical_external_login_error");
+            // Попытка найти пользователя снова, если он был создан, но signInResult не был Succeeded сразу
+            if (info.Principal.FindFirstValue(ClaimTypes.Email) != null)
+            {
+                user = await _userManager.FindByEmailAsync(info.Principal.FindFirstValue(ClaimTypes.Email));
+            }
+
+            if (user == null) // Если все еще не нашли
+            {
+                _logger.LogError(
+                    "User object is null after external login process for {LoginProvider} - {ProviderKey}. This should not happen.",
+                    info.LoginProvider, info.ProviderKey);
+                return Redirect(frontendRedirectUrl + (frontendRedirectUrl.Contains("?") ? "&" : "?") +
+                                "error=critical_external_login_error_user_null");
+            }
         }
 
+        // На этом этапе user должен быть не null
         var roles = await _userManager.GetRolesAsync(user);
         var token = GenerateJwtToken(user, roles);
-        SetAuthCookie(token);
+        SetAuthCookie(token); // Используем новый метод для установки cookie
 
         _logger.LogInformation(
-            "JWT token generated and cookie set for user {Email} after {LoginProvider} login. Redirecting to {ReturnUrl}",
-            user.Email, info.LoginProvider, returnUrl);
-        return Redirect(returnUrl);
+            "JWT token generated and cookie set for user {Email} after {LoginProvider} login. Redirecting to frontend: {FrontendRedirectUrl}",
+            user.Email, info.LoginProvider, frontendRedirectUrl);
+
+        return Redirect(frontendRedirectUrl); // Перенаправляем на фронтенд
     }
 
     [HttpPost("logout")]
@@ -239,6 +288,23 @@ public class AuthController : ControllerBase
         _logger.LogInformation("User logged out.");
         return Ok(new { Message = "Logged out successfully" });
     }
+
+
+    [HttpGet("github-login")]
+    public IActionResult GitHubLogin(string? returnUrl = null)
+    {
+        var redirectUriForFrontend = returnUrl ?? "http://localhost:3000";
+
+        _logger.LogInformation(
+            "Initiating GitHub login. Redirect after processing: {ReturnUrl}",
+            redirectUriForFrontend);
+
+
+        string authenticationScheme = "GitHub";
+        var properties = new AuthenticationProperties { RedirectUri = redirectUriForFrontend };
+        return Challenge(properties, authenticationScheme);
+    }
+
 
     private void SetAuthCookie(string token)
     {
