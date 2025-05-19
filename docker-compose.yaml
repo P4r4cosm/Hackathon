@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -54,7 +54,8 @@ services:
     volumes:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
   gateway:
     build:
       context: . # Контекст сборки - корень проекта
@@ -225,3 +226,6 @@ services:
           echo '❌ Ошибка во время выполнения mc mirror или mc ls.'
         fi
       "
+
+volumes:
+  postgres_data:

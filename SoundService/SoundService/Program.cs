@@ -1,4 +1,3 @@
-
 using DotNetEnv;
 using Microsoft.OpenApi.Models;
 using SoundService.Extensions;
@@ -108,5 +107,8 @@ if (app.Environment.IsDevelopment())
 
 
 app.MapControllers();
+
+// Запуск миграций перед запуском приложения
+app.MigrateDatabase();
 
 app.Run();

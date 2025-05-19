@@ -14,7 +14,41 @@ public static class SoundServiceExtensions
     public static IServiceCollection AddApplicationDbContext(this IServiceCollection services, string connectionString)
     {
         return services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+                npgsqlOptions.MigrationsAssembly("SoundService")));
+    }
+
+    public static IApplicationBuilder MigrateDatabase(this IApplicationBuilder app)
+    {
+        using (var scope = app.ApplicationServices.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            
+            try
+            {
+                logger.LogInformation("Начинаю миграцию базы данных...");
+                db.Database.Migrate();
+                logger.LogInformation("Миграция базы данных успешно завершена");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Ошибка при выполнении миграции: {Message}", ex.Message);
+                // В случае ошибки миграции пробуем создать БД напрямую
+                try
+                {
+                    logger.LogInformation("Пытаюсь создать базу данных напрямую...");
+                    db.Database.EnsureCreated();
+                    logger.LogInformation("База данных успешно создана");
+                }
+                catch (Exception createEx)
+                {
+                    logger.LogError(createEx, "Ошибка при создании базы данных: {Message}", createEx.Message);
+                }
+            }
+            
+            return app;
+        }
     }
 
     public static IServiceCollection AddElastic(this IServiceCollection services, Uri elasticUri)

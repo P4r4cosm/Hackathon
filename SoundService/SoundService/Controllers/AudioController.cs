@@ -25,10 +25,13 @@ public class AudioController : ControllerBase
     }
 
     [HttpPost("upload")]
-    public async Task<IActionResult> UploadAudio(IFormFile file, string folderToUpload)
+    public async Task<IActionResult> UploadAudio(IFormFile file, string folderToUpload = "uploads")
     {
         if (file == null || file.Length == 0)
             return BadRequest("Файл не загружен.");
+
+        _logger.LogInformation("Начало загрузки файла: {FileName}, размер: {Size} байт, папка: {Folder}",
+            file.FileName, file.Length, folderToUpload);
 
         // Получаем расширение файла
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -41,11 +44,14 @@ public class AudioController : ControllerBase
         }
 
         var filePathInMinio = folderToUpload + "/" + file.FileName;
-
-        await _minIOService.UploadTrackAsync(tempFilePath, filePathInMinio, file.ContentType);
+        _logger.LogInformation("Файл сохранен во временную директорию: {TempPath}, будет загружен в MinIO: {MinioPath}",
+            tempFilePath, filePathInMinio);
 
         try
         {
+            await _minIOService.UploadTrackAsync(tempFilePath, filePathInMinio, file.ContentType);
+            _logger.LogInformation("Файл успешно загружен в MinIO");
+
             //достаём метаданные
             var metadata =
                 await _audioMetadataService.CreateAudioRecordFromMetadata(tempFilePath, file.FileName, filePathInMinio);
@@ -84,11 +90,16 @@ public class AudioController : ControllerBase
             await _audioRecordRepository.SaveAsync(audioRecordElastic);
             //удаляем временный файл
             System.IO.File.Delete(tempFilePath);
-            return Ok("Record saved successfully.");
+            return Ok(new { success = true, message = "Record saved successfully.", filePath = filePathInMinio, id = metadata.Id });
         }
         catch (Exception ex)
         {
-            System.IO.File.Delete(tempFilePath);
+            _logger.LogError(ex, "Ошибка при обработке файла: {Message}", ex.Message);
+            try
+            {
+                System.IO.File.Delete(tempFilePath);
+            }
+            catch {}
             return StatusCode(500, $"Ошибка обработки файла: {ex.Message}");
         }
     }

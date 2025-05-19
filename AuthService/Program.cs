@@ -1,4 +1,3 @@
-
 using AuthService.Extensions;
 using AuthService.Infrastructure;
 using AuthService.Services;
@@ -103,6 +102,9 @@ app.UseRouting(); // <-- Добавляем UseRouting перед Auth
 
 app.UseAuthentication(); // Сначала проверяем, аутентифицирован ли пользователь
 app.UseAuthorization(); // Затем проверяем, авторизован ли он для доступа к ресурсу
+
+// Применяем миграции базы данных перед сопоставлением контроллеров
+app.MigrateDatabase();
 
 app.MapControllers(); // Сопоставляем запросы с контроллерами
 app.Run();

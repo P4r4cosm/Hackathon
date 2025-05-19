@@ -2,18 +2,63 @@ using System.Security.Claims;
 using System.Text;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 
 Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
+
+// Увеличиваем максимальный размер получаемых запросов
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // 100 МБ
+});
+
+// Настраиваем обработку форм
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100 МБ
+});
+
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 //конфигурируем Kestrel (добавляем сертификат)
 KestrelConfiguratorHelper.ConfigureKestrel(builder);
 
+// Заменяем старый метод AddOpenApi() на правильную конфигурацию Swagger/OpenAPI
+services.AddEndpointsApiExplorer();
+services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Gateway API", Version = "v1" });
+    
+    // Добавляем поддержку JWT-авторизации в Swagger
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
 
-services.AddOpenApi();
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 services.AddAuthorization();
 
 //конфигурация для JWT
@@ -131,7 +176,10 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi(); // Регистрирует конечную точку /openapi/v1.json
+    // Заменяем устаревший метод MapOpenApi на правильные вызовы Swagger
+    app.UseSwagger(c => {
+        c.RouteTemplate = "openapi/{documentname}.json";
+    });
     // Добавляем Swagger UI
     app.UseSwaggerUI(options =>
     {

@@ -9,13 +9,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="DotNetEnv" Version="3.1.1" />
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.5" />
+        <PackageReference Include="DotNetEnv" Version="3.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0-preview.3.24172.13" />
         <PackageReference Include="Microsoft.AspNetCore.HttpOverrides" Version="2.3.0" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.4"/>
-        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="8.1.1" />
-        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="8.1.1" />
-        <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0-preview.3.24172.13" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.5.0" />
+        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.5.0" />
+        <PackageReference Include="Yarp.ReverseProxy" Version="2.1.0" />
     </ItemGroup>
 
     <ItemGroup>
@@ -23,5 +24,15 @@
         <Link>.dockerignore</Link>
       </Content>
     </ItemGroup>
+
+    <!-- Настройки для увеличения размера загружаемых файлов -->
+    <PropertyGroup>
+      <IncludeOpenAPIAnalyzers>true</IncludeOpenAPIAnalyzers>
+      <GenerateDocumentationFile>true</GenerateDocumentationFile>
+      <!-- Увеличиваем лимит загрузки файлов -->
+      <KestrelServerLimits>
+        <MaxRequestBodySize>100000000</MaxRequestBodySize>
+      </KestrelServerLimits>
+    </PropertyGroup>
 
 </Project>

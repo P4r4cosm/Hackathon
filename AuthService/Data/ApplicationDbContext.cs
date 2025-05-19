@@ -11,6 +11,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser> // Или
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, IConfiguration configuration)
         : base(options)
     {
-        Database.EnsureCreated();
+        // База данных будет создана через MigrateDatabase в Program.cs
     }
 }

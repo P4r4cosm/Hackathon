@@ -91,6 +91,12 @@ export const audioArchiveApi = createApi({
         url: 'upload',
         method: 'POST',
         body: formData,
+        formData: true,
+        prepareHeaders: (headers) => {
+          // Удаляем Content-Type, чтобы браузер автоматически установил правильный заголовок с boundary для FormData
+          headers.delete('Content-Type');
+          return headers;
+        },
       }),
       invalidatesTags: ['Recording'],
     }),

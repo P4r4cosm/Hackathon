@@ -28,9 +28,19 @@ public class DbSeederService
             {
                 _logger.LogInformation("Соединение с базой данных установлено успешно.");
                 
-                // Принудительно создаем схему базы данных
-                _logger.LogInformation("Создаю схему базы данных...");
-                _context.Database.EnsureCreated();
+                try
+                {
+                    // Применяем все миграции
+                    _logger.LogInformation("Применяю миграции...");
+                    _context.Database.Migrate();
+                    _logger.LogInformation("Миграции успешно применены.");
+                }
+                catch (Exception migrateEx)
+                {
+                    _logger.LogError(migrateEx, "Ошибка при применении миграций. Пытаюсь создать схему базы данных напрямую.");
+                    _context.Database.EnsureCreated();
+                    _logger.LogInformation("Схема базы данных создана успешно.");
+                }
                 
                 // Проверяем, есть ли таблица AudioRecords
                 try {

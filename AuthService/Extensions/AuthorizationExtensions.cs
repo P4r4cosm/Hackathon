@@ -5,6 +5,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Logging;
+using System.Security.Claims;
 
 namespace AuthService.Extensions;
 
@@ -38,7 +41,30 @@ public static class AuthorizationExtensions
     public static IServiceCollection AddApplicationDbContext(this IServiceCollection services, string connectionString)
     {
         return services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+                npgsqlOptions.MigrationsAssembly("AuthService")));
+    }
+
+    public static IApplicationBuilder MigrateDatabase(this IApplicationBuilder app)
+    {
+        using (var scope = app.ApplicationServices.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            
+            try
+            {
+                logger.LogInformation("Начинаю миграцию базы данных AuthService...");
+                db.Database.EnsureCreated();
+                logger.LogInformation("Миграция базы данных AuthService успешно завершена");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Ошибка при выполнении миграции AuthService: {Message}", ex.Message);
+            }
+            
+            return app;
+        }
     }
 
     public static IServiceCollection AddApplicationIdentity(this IServiceCollection services)
@@ -67,13 +93,14 @@ public static class AuthorizationExtensions
             {
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = issuer,
-                    ValidAudience = audience,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtSettings["Issuer"],
+                    ValidateAudience = true,
+                    ValidAudience = jwtSettings["Audience"],
+                    RoleClaimType = ClaimTypes.Role, 
+                    ClockSkew = TimeSpan.Zero
                 };
             });
 
