@@ -3,6 +3,7 @@ using AuthService.Extensions;
 using AuthService.Infrastructure;
 using AuthService.Services;
 using DotNetEnv;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 
 
@@ -77,7 +78,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policyBuilder =>
     {
-        policyBuilder.WithOrigins("https://my-frontend.com ")
+        policyBuilder.WithOrigins("http://localhost:3010 ")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials(); // важно для кук
@@ -91,14 +92,25 @@ services.ConfigureApplicationCookie(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // или CookieSecurePolicy.None, но SameAsRequest лучше
     options.Cookie.SameSite = SameSiteMode.Lax; // <--- ИЗМЕНИТЬ НА LAX
-    options.LoginPath = "";
+    //options.LoginPath = "";
 });
 
 services.AddControllers();
 services.AddEndpointsApiExplorer();
 services.AddSwaggerGen();
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+    options.RequireHeaderSymmetry = false; // Может понадобиться в некоторых сценариях с Docker
+});
+
 var app = builder.Build();
+app.UseForwardedHeaders();
+
 app.UseCors("AllowFrontend");
 // Инициализация ролей
 using (var scope = app.Services.CreateScope())
