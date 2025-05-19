@@ -40,6 +40,8 @@ services:
       - JwtSettings__Issuer=${JwtSettings__Issuer}
       - JwtSettings__Audience=${JwtSettings__Audience}
       - JwtSettings__DurationInHours=${JwtSettings__DurationInHours}
+      - AUTHENTICATION__GOOGLE__CLIENTID=${AUTHENTICATION__GOOGLE__CLIENTID}
+      - AUTHENTICATION__GOOGLE__CLIENTSECRET=${AUTHENTICATION__GOOGLE__CLIENTSECRET}
       # Настройки для HTTPS
       - ASPNETCORE_URLS=http://+:80;https://+:443
       - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD}
