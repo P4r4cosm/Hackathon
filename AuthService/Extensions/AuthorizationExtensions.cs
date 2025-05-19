@@ -1,6 +1,9 @@
-﻿using System.Text;
+﻿using System.Security.Claims;
+using System.Text;
 using AuthService.Data;
 using AuthService.Models;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -29,12 +32,14 @@ public static class AuthorizationExtensions
 
                 // User settings.
                 options.User.AllowedUserNameCharacters =
-                    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
+                    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+" +
+                    " абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"; // Добавляем пробел и кириллицу
                 options.User.RequireUniqueEmail = true;
             })
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders(); // Для сброса пароля и т.д.
     }
+
     public static IServiceCollection AddApplicationDbContext(this IServiceCollection services, string connectionString)
     {
         return services.AddDbContext<ApplicationDbContext>(options =>
@@ -48,23 +53,39 @@ public static class AuthorizationExtensions
             .Services;
     }
 
-    public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddJwtAuthentication(this IServiceCollection services,
+        IConfiguration configuration)
     {
-        var jwtSettings = configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"];
-        var issuer = jwtSettings["Issuer"];
-        var audience = jwtSettings["Audience"];
-
-        if (string.IsNullOrEmpty(secretKey) || string.IsNullOrEmpty(issuer) || string.IsNullOrEmpty(audience))
-            throw new InvalidOperationException("JWT настройки некорректны");
-
         services.AddAuthentication(options =>
             {
-                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+            })
+            .AddCookie(options =>
+            {
+                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                //options.LoginPath = "/api/Auth/LoginByName"; // Или ваша страница логина, если есть UI
+                //options.LogoutPath = "/api/Auth/Logout";
+                //options.AccessDeniedPath = "/Account/AccessDenied"; // Страница "доступ запрещен"
+            })
+            .AddGoogle(options =>
+            {
+                options.ClientId = configuration["Authentication:Google:ClientId"];
+                options.ClientSecret = configuration["Authentication:Google:ClientSecret"];
+                options.SignInScheme = IdentityConstants.ExternalScheme;
+                options.CallbackPath = "/signin-google";
             })
             .AddJwtBearer(options =>
             {
+                var jwtSettings = configuration.GetSection("JwtSettings");
+                var secretKey = jwtSettings["SecretKey"];
+                var issuer = jwtSettings["Issuer"];
+                var audience = jwtSettings["Audience"];
+
+                if (string.IsNullOrEmpty(secretKey) || string.IsNullOrEmpty(issuer) || string.IsNullOrEmpty(audience))
+                    throw new InvalidOperationException("JWT settings are invalid");
+
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
@@ -75,10 +96,17 @@ public static class AuthorizationExtensions
                     ValidAudience = audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
                 };
+                // Добавляем чтение токена из cookie
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        context.Token = context.Request.Cookies["auth_token"]; // Имя вашей cookie
+                        return Task.CompletedTask;
+                    }
+                };
             });
 
         return services;
     }
-
-   
 }
