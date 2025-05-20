@@ -15,10 +15,11 @@ DEMUCS_IMAGE_NAME = "local/demucs_app" # Docker-образ Demucs (должен 
 DEMUCS_MODELS_VOLUME = "demucs_models_cache" # Именованный том для кэша моделей Demucs
 
 # Динамическое определение пути к общей директории shared_docker_data
-# shared_docker_data должна находиться в корне репозитория (на два уровня выше текущего файла)
-script_dir = os.path.dirname(os.path.abspath(__file__))
-hackathon_dir = os.path.abspath(os.path.join(script_dir, '..', '..'))
-HOST_SHARED_DIR_PATH = os.path.join(hackathon_dir, "shared_docker_data")
+# shared_docker_data должна находиться в директории Hackathon,
+# а Hackathon на один уровень выше директории, где лежит app.py (FlaskServise)
+script_dir = os.path.dirname(os.path.abspath(__file__))      # Директория FlaskServise
+hackathon_root_dir = os.path.abspath(os.path.join(script_dir, '..')) # Поднимаемся на один уровень до Hackathon
+HOST_SHARED_DIR_PATH = os.path.join(hackathon_root_dir, "shared_docker_data")
 
 # Пути для Flask (относительно HOST_SHARED_DIR_PATH)
 FLASK_INPUT_DIR = os.path.join(HOST_SHARED_DIR_PATH, "input_files")
