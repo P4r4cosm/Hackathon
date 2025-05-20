@@ -1,0 +1,19 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Git
+.git
+.gitignore
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp
+
+# Docker
+Dockerfile
+.dockerignore 

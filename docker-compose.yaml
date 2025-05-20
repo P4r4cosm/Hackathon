@@ -199,5 +199,46 @@ services:
       # ./music_test/original_tracks на хосте было доступно
       # внутри контейнера mc-init по пути /init-audio
       - ./music_test/:/init-audio
-      - ./init-mc.sh:/usr/local/bin/init-mc.sh # Монтируем скрипт
+       - ./init-mc.sh:/usr/local/bin/init-mc.sh # Монтируем скрипт
     entrypoint: ["/usr/local/bin/init-mc.sh"]   # <--- ИЗМЕНЕНИЕ ЗДЕСЬ
+
+  demucs_service: # Этот сервис теперь в основном для сборки образа
+    build:
+      context: ./demucs
+      dockerfile: Dockerfile
+    image: local/demucs_app # Присваиваем имя собираемому образу
+    container_name: demucs_build_helper # Имя контейнера не так важно, т.к. он не будет постоянно работать
+    volumes:
+      # Эти тома здесь для того, чтобы docker-compose их "знал",
+      # но фактическое использование будет при docker run из FlaskServise.
+      # Монтирование в этом сервисе не имеет смысла, так как он не будет запущен.
+      # Однако, demucs_models_cache может быть полезен, если demucs/Dockerfile
+      # скачивает модели при сборке и кладет их в /data/models.
+      - demucs_models_cache:/data/models 
+
+  flask_service:
+    build:
+      context: .
+      dockerfile: FlaskServise/Dockerfile
+    container_name: flask_service
+    restart: unless-stopped
+    ports:
+      - "5001:5000" # Хост:Контейнер
+    volumes:
+      # Используем bind mount для отладки видимости файлов
+      - ./shared_docker_data:/shared_host_mount 
+      - /var/run/docker.sock:/var/run/docker.sock # Монтирование Docker-сокета
+      # - shared_audio_data:/app/shared_audio_data # Временно заменяем именованный том
+    depends_on:
+      - demucs_service # FlaskServise зависит от demucs_service
+    environment:
+      # Убедитесь, что DEMUCS_CONTAINER_NAME в app.py соответствует имени контейнера demucs_service
+      - DEMUCS_CONTAINER_NAME=demucs_service 
+      # SHARED_DIR_FLASK и SHARED_DIR_DEMUCS_CMD_ARG уже определены в app.py как /shared_audio_data
+      # Эти переменные окружения можно также установить здесь, если хотите переопределить значения из app.py
+
+volumes:
+  # shared_audio_data: {} # Временно не используется
+  demucs_models_cache: {} # Том для кэширования моделей Demucs
+    
+
