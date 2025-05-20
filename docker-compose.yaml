@@ -217,8 +217,8 @@ services:
 
   flask_service:
     build:
-      context: .
-      dockerfile: FlaskServise/Dockerfile
+      context: ./FlaskServise       # указываем, где брать контекст сборки
+      dockerfile: Dockerfile
     container_name: flask_service
     restart: unless-stopped
     ports:
@@ -232,9 +232,17 @@ services:
       - demucs_service # FlaskServise зависит от demucs_service
     environment:
       # Убедитесь, что DEMUCS_CONTAINER_NAME в app.py соответствует имени контейнера demucs_service
-      - DEMUCS_CONTAINER_NAME=demucs_service 
+      - DEMUCS_CONTAINER_NAME=demucs_service
+      - DEMUCS_MODEL=${DEMUCS_MODEL} 
       # SHARED_DIR_FLASK и SHARED_DIR_DEMUCS_CMD_ARG уже определены в app.py как /shared_audio_data
       # Эти переменные окружения можно также установить здесь, если хотите переопределить значения из app.py
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1 # или 'all' для всех доступных GPU
+              capabilities: [gpu] # 'gpu' - это стандартная возможность для NVIDIA GPU
 
 volumes:
   # shared_audio_data: {} # Временно не используется

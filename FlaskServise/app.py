@@ -1,34 +1,23 @@
 import os
+import uuid
 import subprocess
-import uuid # Для уникальных имен временных контейнеров
-import time # Для небольшой задержки
+# import demucs # Не используется напрямую, кроме версии
 from flask import Flask, request, send_from_directory, jsonify
 from werkzeug.utils import secure_filename
-# import shutil # shutil не используется, можно удалить, если ранее добавлялся для других целей
+import torch
+import shutil # Для удаления папки
 
 app = Flask(__name__)
+print(f"PyTorch version: {torch.__version__}")
+print(f"CUDA available: {torch.cuda.is_available()}") # Должно быть True
+# import demucs # Если хотите печатать версию demucs
+# print(f"Demucs version: {demucs.__version__}")
 
-ALLOWED_EXTENSIONS = {'wav', 'flac'}
 
-# --- Конфигурация Docker и путей ---
-DEMUCS_IMAGE_NAME = "local/demucs_app" # Docker-образ Demucs (должен быть собран)
-DEMUCS_MODELS_VOLUME = "demucs_models_cache" # Именованный том для кэша моделей Demucs
-
-# Динамическое определение пути к общей директории shared_docker_data
-# shared_docker_data должна находиться в корне репозитория (на два уровня выше текущего файла)
-script_dir = os.path.dirname(os.path.abspath(__file__))
-hackathon_dir = os.path.abspath(os.path.join(script_dir, '..', '..'))
-HOST_SHARED_DIR_PATH = os.path.join(hackathon_dir, "shared_docker_data")
-
-# Пути для Flask (относительно HOST_SHARED_DIR_PATH)
-FLASK_INPUT_DIR = os.path.join(HOST_SHARED_DIR_PATH, "input_files")
-FLASK_OUTPUT_DIR_BASE = os.path.join(HOST_SHARED_DIR_PATH, "output_files")
-
-# Пути внутри контейнера Demucs (куда монтируется HOST_SHARED_DIR_PATH)
-DEMUCS_CONTAINER_MOUNT_POINT = "/data_mount" 
-DEMUCS_CMD_INPUT_DIR = os.path.join(DEMUCS_CONTAINER_MOUNT_POINT, "input_files")
-DEMUCS_CMD_OUTPUT_DIR = os.path.join(DEMUCS_CONTAINER_MOUNT_POINT, "output_files")
-# --- Конец конфигурации --- 
+# Папки
+UPLOAD_FOLDER = '/data/input'
+OUTPUT_FOLDER = '/data/output'
+ALLOWED_EXTENSIONS = {'wav', 'flac', 'mp3'} # Добавим mp3, т.к. ffmpeg его поддерживает
 
 # Проверка расширения файла
 def allowed_file(filename):
@@ -42,116 +31,119 @@ def process_song():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'Файл не выбран'}), 400
-    
-    original_filename_for_cleanup = None
-    track_name_for_cleanup = None
-    model_name_for_cleanup = "htdemucs_ft" # Используемая модель Demucs
+
+    # print("Demucs version:", demucs.__version__) # Раскомментируйте, если импортировали demucs
+    print(f"CUDA available during request: {torch.cuda.is_available()}")
 
     if file and allowed_file(file.filename):
-        original_filename_for_cleanup = secure_filename(file.filename)
-        track_name_for_cleanup = os.path.splitext(original_filename_for_cleanup)[0]
+        original_filename_secure = secure_filename(file.filename)
+        original_extension = original_filename_secure.rsplit('.', 1)[1].lower()
 
-        os.makedirs(FLASK_INPUT_DIR, exist_ok=True)
-        os.makedirs(FLASK_OUTPUT_DIR_BASE, exist_ok=True)
-        
-        temp_input_path_flask = os.path.join(FLASK_INPUT_DIR, original_filename_for_cleanup)
-        file.save(temp_input_path_flask)
-        
-        time.sleep(0.5) # Небольшая задержка для полной записи файла
+        track_id = str(uuid.uuid4()) # Это будет именем папки и basename файла для demucs
 
-        demucs_input_file_in_container = os.path.join(DEMUCS_CMD_INPUT_DIR, original_filename_for_cleanup)
+        # Входной файл будет сохранен с уникальным именем track_id и его оригинальным расширением
+        input_filename_for_demucs = f"{track_id}.{original_extension}"
+        input_path = os.path.join(UPLOAD_FOLDER, input_filename_for_demucs)
 
-        demucs_command_str = (
-            f"python3 -m demucs -n {model_name_for_cleanup} "
-            f"--two-stems vocals --shifts 1 --overlap 0.3 "
-            f"--out {DEMUCS_CMD_OUTPUT_DIR} {demucs_input_file_in_container}"
-        )
-        
-        temp_container_name = f"demucs_worker_{uuid.uuid4().hex[:8]}"
+        # Выходная директория для этого трека (основная)
+        track_output_base_dir = os.path.join(OUTPUT_FOLDER, track_id)
 
-        docker_run_command = [
-            "docker", "run", "--rm",
-            "--name", temp_container_name,
-            "-v", f"{HOST_SHARED_DIR_PATH}:{DEMUCS_CONTAINER_MOUNT_POINT}", 
-            "-v", f"{DEMUCS_MODELS_VOLUME}:/data/models", # Кэширование моделей Demucs
-            DEMUCS_IMAGE_NAME,
-            "sh", "-c", demucs_command_str
-        ]
-        
+        model_name = "htdemucs" # Модель, используемая в demucs
+
+        # Demucs создаст подпапку с именем модели и потом подпапку с именем входного файла (без расширения)
+        # /data/output/{track_id}/{model_name}/{track_id}/vocals.wav
+        final_vocals_dir = os.path.join(track_output_base_dir, model_name, track_id)
+        vocals_path = os.path.join(final_vocals_dir, "vocals.wav")
+
         try:
-            app.logger.info(f"Executing Demucs: {' '.join(docker_run_command)}")
-            process = subprocess.run(docker_run_command, check=True, capture_output=True, text=True)
-            app.logger.info(f"Demucs stdout: {process.stdout}")
-            if process.stderr:
-                 app.logger.warning(f"Demucs stderr: {process.stderr}") # stderr не всегда означает ошибку
-            
-            expected_vocals_path = os.path.join(
-                FLASK_OUTPUT_DIR_BASE, 
-                model_name_for_cleanup, 
-                track_name_for_cleanup, 
-                "vocals.wav"
+            os.makedirs(UPLOAD_FOLDER, exist_ok=True) # Убедимся, что папка input есть
+            os.makedirs(track_output_base_dir, exist_ok=True) # Создаем базовую выходную папку для трека
+            file.save(input_path)
+
+            cmd = [
+                "python3", "-m", "demucs", # Рекомендуемый способ вызова demucs как модуля
+                "-d", "cuda" if torch.cuda.is_available() else "cpu",
+                "-n", model_name,
+                "--two-stems", "vocals",
+                "--shifts", "0", # Можно убрать для ускорения, если качество устраивает
+                "--out", track_output_base_dir, # Указываем базовую выходную директорию
+                input_path
+            ]
+            print(f"Executing command: {' '.join(cmd)}")
+
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False) # check=False для ручной проверки
+
+            print(f"Demucs stdout:\n{result.stdout}")
+            print(f"Demucs stderr:\n{result.stderr}")
+
+            if result.returncode != 0:
+                return jsonify({
+                    'error': 'Ошибка при обработке файла Demucs',
+                    'stderr': result.stderr,
+                    'stdout': result.stdout,
+                    'returncode': result.returncode
+                }), 500
+
+            if not os.path.exists(vocals_path):
+                # Попытаемся найти файл, если структура немного другая (маловероятно, но для отладки)
+                found_vocals = []
+                for root, _, files in os.walk(track_output_base_dir):
+                    for f_name in files:
+                        if "vocals.wav" in f_name:
+                            found_vocals.append(os.path.join(root, f_name))
+                return jsonify({
+                    'error': f'Не удалось найти обработанный файл vocals.wav по ожидаемому пути: {vocals_path}',
+                    'expected_path': vocals_path,
+                    'actual_content_of_output_dir': list(os.walk(track_output_base_dir)),
+                    'found_vocals_if_any': found_vocals,
+                    'demucs_stdout': result.stdout,
+                    'demucs_stderr': result.stderr
+                    }), 500
+
+            # Отправляем файл
+            response = send_from_directory(
+                directory=final_vocals_dir, # Директория, где лежит vocals.wav
+                path="vocals.wav",
+                as_attachment=True,
+                download_name=f"{track_id}_vocals.wav" # Имя файла для скачивания клиентом
             )
 
-            if os.path.exists(expected_vocals_path):
-                return send_from_directory(
-                    directory=os.path.dirname(expected_vocals_path), 
-                    path="vocals.wav",
-                    as_attachment=True
-                )
-            else:
-                error_detail = f"Обработанный файл vocals.wav не найден: {expected_vocals_path}."
-                if process.stdout: error_detail += f" Demucs stdout: {process.stdout}"
-                if process.stderr: error_detail += f" Demucs stderr: {process.stderr}"
-                app.logger.error(error_detail)
-                return jsonify({'error': 'Обработанный файл вокала не найден после выполнения Demucs.', 'details': error_detail}), 500
+            # Очистка после отправки файла
+            # Важно: это выполнится только ПОСЛЕ того, как файл будет полностью отправлен
+            # Это делается с помощью response.call_on_close
+            @response.call_on_close
+            def cleanup_files():
+                try:
+                    print(f"Cleaning up input file: {input_path}")
+                    os.remove(input_path)
+                except OSError as e:
+                    print(f"Error removing input file {input_path}: {e}")
+                try:
+                    print(f"Cleaning up output directory: {track_output_base_dir}")
+                    shutil.rmtree(track_output_base_dir)
+                except OSError as e:
+                    print(f"Error removing output directory {track_output_base_dir}: {e}")
 
-        except subprocess.CalledProcessError as e:
-            app.logger.error(f"Ошибка обработки Demucs. Команда: {' '.join(e.cmd)}. Код: {e.returncode}")
-            app.logger.error(f"Demucs stdout: {e.stdout}")
-            app.logger.error(f"Demucs stderr: {e.stderr}")
-            return jsonify({
-                'error': 'Ошибка обработки песни с помощью Demucs',
-                'command': ' '.join(e.cmd),
-                'returncode': e.returncode,
-                'stdout': e.stdout,
-                'stderr': e.stderr
-            }), 500
+            return response
+
         except Exception as e:
-            app.logger.error(f"Непредвиденная ошибка: {str(e)}")
-            return jsonify({'error': f'Произошла непредвиденная ошибка: {str(e)}'}), 500
-        finally:
-            # Очистка файлов
-            if original_filename_for_cleanup:
-                input_file_to_delete = os.path.join(FLASK_INPUT_DIR, original_filename_for_cleanup)
-                if os.path.exists(input_file_to_delete):
-                    try:
-                        os.remove(input_file_to_delete)
-                        app.logger.info(f"Удален входной файл: {input_file_to_delete}")
-                    except OSError as e_remove_input:
-                        app.logger.error(f"Ошибка удаления входного файла {input_file_to_delete}: {e_remove_input}")
-                
-                if track_name_for_cleanup: 
-                    no_vocals_file_to_delete = os.path.join(
-                        FLASK_OUTPUT_DIR_BASE,
-                        model_name_for_cleanup,
-                        track_name_for_cleanup,
-                        "no_vocals.wav"
-                    )
-                    if os.path.exists(no_vocals_file_to_delete):
-                        try:
-                            os.remove(no_vocals_file_to_delete)
-                            app.logger.info(f"Удален файл no_vocals.wav: {no_vocals_file_to_delete}")
-                        except OSError as e_remove_novocals:
-                            app.logger.error(f"Ошибка удаления no_vocals.wav {no_vocals_file_to_delete}: {e_remove_novocals}")
-            
+            # Удаляем входной файл и выходную папку в случае любой ошибки
+            if os.path.exists(input_path):
+                try:
+                    os.remove(input_path)
+                except OSError as err_remove:
+                    print(f"Error removing input file on exception: {err_remove}")
+            if os.path.exists(track_output_base_dir):
+                try:
+                    shutil.rmtree(track_output_base_dir)
+                except OSError as err_rmtree:
+                    print(f"Error removing output directory on exception: {err_rmtree}")
+            return jsonify({'error': f'Внутренняя ошибка сервера: {str(e)}', 'trace': traceback.format_exc()}), 500
     else:
-        return jsonify({'error': 'Недопустимый тип файла'}), 400
+        return jsonify({'error': 'Недопустимый тип файла или файл не предоставлен'}), 400
 
 if __name__ == '__main__':
-    os.makedirs(FLASK_INPUT_DIR, exist_ok=True)
-    os.makedirs(FLASK_OUTPUT_DIR_BASE, exist_ok=True)
-    app.logger.info(f"Общая директория на хосте (вычислено): {HOST_SHARED_DIR_PATH}")
-    app.logger.info(f"Директория для входных файлов Flask: {FLASK_INPUT_DIR}")
-    app.logger.info(f"Базовая директория для выходных файлов Flask: {FLASK_OUTPUT_DIR_BASE}")
-    
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+    import traceback # Для более детальных ошибок
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    app.run(host='0.0.0.0', port=5000, debug=True) # debug=True для разработки
