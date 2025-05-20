@@ -13,7 +13,6 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -199,7 +198,7 @@ services:
       # ./music_test/original_tracks на хосте было доступно
       # внутри контейнера mc-init по пути /init-audio
       - ./music_test/:/init-audio
-       - ./init-mc.sh:/usr/local/bin/init-mc.sh # Монтируем скрипт
+      - ./init-mc.sh:/usr/local/bin/init-mc.sh # Монтируем скрипт
     entrypoint: ["/usr/local/bin/init-mc.sh"]   # <--- ИЗМЕНЕНИЕ ЗДЕСЬ
 
   demucs_service: # Этот сервис теперь в основном для сборки образа
