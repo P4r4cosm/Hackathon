@@ -24,9 +24,11 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("Author", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -39,12 +41,14 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("SoundService.Models.Album", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("integer");
 
-                    b.Property<Guid>("AuthorId")
-                        .HasColumnType("uuid");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AuthorId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -62,11 +66,11 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("SoundService.Models.AudioKeyword", b =>
                 {
-                    b.Property<Guid>("AudioRecordId")
-                        .HasColumnType("uuid");
+                    b.Property<int>("AudioRecordId")
+                        .HasColumnType("integer");
 
-                    b.Property<Guid>("KeywordId")
-                        .HasColumnType("uuid");
+                    b.Property<int>("KeywordId")
+                        .HasColumnType("integer");
 
                     b.HasKey("AudioRecordId", "KeywordId");
 
@@ -77,15 +81,17 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("SoundService.Models.AudioRecord", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("integer");
 
-                    b.Property<Guid?>("AlbumId")
-                        .HasColumnType("uuid");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<Guid>("AuthorId")
-                        .HasColumnType("uuid");
+                    b.Property<int?>("AlbumId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AuthorId")
+                        .HasColumnType("integer");
 
                     b.Property<TimeSpan>("Duration")
                         .HasColumnType("interval");
@@ -97,8 +103,8 @@ namespace SoundService.Migrations
                     b.Property<long>("FileSizeBytes")
                         .HasColumnType("bigint");
 
-                    b.Property<Guid>("GenreId")
-                        .HasColumnType("uuid");
+                    b.Property<int>("GenreId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -126,11 +132,11 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("SoundService.Models.AudioThematicTag", b =>
                 {
-                    b.Property<Guid>("AudioRecordId")
-                        .HasColumnType("uuid");
+                    b.Property<int>("AudioRecordId")
+                        .HasColumnType("integer");
 
-                    b.Property<Guid>("ThematicTagId")
-                        .HasColumnType("uuid");
+                    b.Property<int>("ThematicTagId")
+                        .HasColumnType("integer");
 
                     b.HasKey("AudioRecordId", "ThematicTagId");
 
@@ -141,9 +147,11 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("SoundService.Models.Genre", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -156,9 +164,11 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("SoundService.Models.Keyword", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Text")
                         .IsRequired()
@@ -171,12 +181,14 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("SoundService.Models.ModerationStatus", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("integer");
 
-                    b.Property<Guid>("AudioRecordId")
-                        .HasColumnType("uuid");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AudioRecordId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ModeratorComment")
                         .HasColumnType("text");
@@ -200,9 +212,11 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("SoundService.Models.ThematicTag", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Name")
                         .IsRequired()

@@ -12,6 +12,11 @@ services:
       - "5432:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   authservice:
     build:
@@ -19,10 +24,10 @@ services:
       dockerfile: AuthService/Dockerfile # Путь к Dockerfile вашего сервиса
     env_file:
       - .env 
+    container_name: AuthService
     ports:
       - "8012:80"   # Хост 8012 -> Контейнер 80 (HTTP)
       - "8011:443"  # Хост 8011 -> Контейнер 443 (HTTPS)
-    container_name: AuthService
     environment:
       - ASPNETCORE_ENVIRONMENT=Development # Или Development, как вам нужно
       - POSTGRES_HOST=postgres
@@ -35,6 +40,8 @@ services:
       - JwtSettings__Issuer=${JwtSettings__Issuer}
       - JwtSettings__Audience=${JwtSettings__Audience}
       - JwtSettings__DurationInHours=${JwtSettings__DurationInHours}
+      - AUTHENTICATION__GOOGLE__CLIENTID=${AUTHENTICATION__GOOGLE__CLIENTID}
+      - AUTHENTICATION__GOOGLE__CLIENTSECRET=${AUTHENTICATION__GOOGLE__CLIENTSECRET}
       # Настройки для HTTPS
       - ASPNETCORE_URLS=http://+:80;https://+:443
       - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD}
@@ -46,7 +53,6 @@ services:
       - AllowedOrigins__4=http://authservicefrontend
       - AllowedOrigins__5=http://frontend
       - AllowedOrigins__6=http://gateway
-       # Настройки для HTTPS
     volumes:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
@@ -79,6 +85,34 @@ services:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
       - authservice
+  soundservice:
+    build:
+      context: .
+      dockerfile: SoundService/SoundService/Dockerfile
+    env_file:
+      - .env
+    container_name: SoundService
+    ports: 
+      - "8020:80"
+      #- "8021:443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development 
+      # Настройки для HTTPS
+      - ASPNETCORE_URLS=http://+:80; #https://+:443
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - ROLES=${ROLES}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_PORT=${MINIO_PORT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - ELASTIC_URI=${ELASTIC_URI}
+    depends_on:
+      - postgres
 
   frontend:
     build:
@@ -89,6 +123,9 @@ services:
       - "3000:80"   # Хост 3000 -> Контейнер 80 (HTTP)
     depends_on:
       - gateway
+      - postgres
+      - elasticsearch
+      - minio
 
   authservicefrontend:
     build:
@@ -98,10 +135,12 @@ services:
     restart: always
     ports:
       - "3010:80"   # Хост 3010 -> Контейнер 80 (HTTP)
+    environment:
+      - ASPNETCORE_URLS=http://+:80;https://+:443 # Kestrel будет слушать оба порта
+      - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD} # Ссылка на переменную из .env
     depends_on:
       - authservice
       - gateway
-
   elasticsearch:
     image: elasticsearch:8.17.3
     container_name: elastic
@@ -148,46 +187,20 @@ services:
     container_name: mc-init
     depends_on:
       - minio
+    environment:
+      # Передаем ВСЕ необходимые переменные из .env
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
     volumes:
       # Эта строка отвечает за то, чтобы содержимое вашей папки
       # ./music_test/original_tracks на хосте было доступно
       # внутри контейнера mc-init по пути /init-audio
       - ./music_test/:/init-audio
-    entrypoint: |
-      /bin/sh -c "
-        echo 'Ожидание MinIO...'
-        sleep 8 # Можно немного увеличить sleep для надежности, если MinIO стартует медленно
-
-        echo 'Настройка mc клиента...'
-        mkdir -p /root/.mc
-        # Убедитесь, что accessKey и secretKey здесь совпадают с MINIO_ROOT_USER/PASSWORD
-        # или используйте переменные окружения для mc alias set, как предлагалось ранее
-        echo '{\"version\": \"9\", \"hosts\": {\"local\": {
-          \"url\": \"http://minio:9000\",
-          \"accessKey\": \"minioadmin\",
-          \"secretKey\": \"minioadmin\",
-          \"api\": \"S3v4\"
-        }}}' > /root/.mc/config.json
-
-        echo 'Создание бакета local/audio-bucket (если не существует)...'
-        mc mb --ignore-existing local/audio-bucket
-
-        echo '🔄 Зеркалирую все содержимое /init-audio/ в local/audio-bucket/ сохраняя структуру...'
-        # Ключевая команда: mc mirror
-        # --overwrite перезапишет существующие файлы в бакете, если они есть и в источнике
-        # Если нужно, чтобы удалялись файлы в бакете, которых нет в источнике, добавьте --remove
-        mc mirror --overwrite /init-audio/ local/audio-bucket/
-
-        # Проверка: вывести список файлов в бакете для отладки
-        echo 'Содержимое бакета local/audio-bucket/ после зеркалирования:'
-        mc ls --recursive local/audio-bucket/
-
-        if [ $? -eq 0 ]; then
-          echo '✅ Процесс зеркалирования успешно завершен.'
-        else
-          echo '❌ Ошибка во время выполнения mc mirror или mc ls.'
-        fi
-      "
+       - ./init-mc.sh:/usr/local/bin/init-mc.sh # Монтируем скрипт
+    entrypoint: ["/usr/local/bin/init-mc.sh"]   # <--- ИЗМЕНЕНИЕ ЗДЕСЬ
 
   demucs_service: # Этот сервис теперь в основном для сборки образа
     build:
@@ -227,3 +240,5 @@ services:
 volumes:
   # shared_audio_data: {} # Временно не используется
   demucs_models_cache: {} # Том для кэширования моделей Demucs
+    
+

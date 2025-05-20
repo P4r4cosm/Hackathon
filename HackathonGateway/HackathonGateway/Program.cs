@@ -136,7 +136,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/openapi/v1.json", "Gateway API");
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "AuthService API");
         options.RoutePrefix = ""; // Доступ по /swagger
     });
 }
