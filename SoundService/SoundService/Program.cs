@@ -3,6 +3,7 @@ using DotNetEnv;
 using Microsoft.OpenApi.Models;
 using SoundService.Extensions;
 using SoundService.Models.Settings;
+using SoundService.RabbitMQ;
 using SoundService.Repositories;
 using SoundService.Services;
 
@@ -86,6 +87,11 @@ services.AddMinIO(minioSettings);
 services.AddElastic(elasticUri);
 //репозитории
 services.AddScoped<AudioRecordRepository>();
+
+
+//rabbit
+builder.Services.AddHostedService<RabbitMQInitializer>();
+builder.Services.AddSingleton<RabbitMqService>();
 
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
