@@ -90,6 +90,7 @@ services.AddScoped<AudioRecordRepository>();
 
 
 //rabbit
+builder.Services.AddSingleton<RabbitMqConf>();
 builder.Services.AddHostedService<RabbitMQInitializer>();
 builder.Services.AddSingleton<RabbitMqService>();
 

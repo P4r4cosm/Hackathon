@@ -13,11 +13,12 @@ public class RabbitMqService : IDisposable
     private ConnectionFactory _connectionFactory;
     private ILogger<RabbitMqService> _logger;
     private object _channelLock = new object(); // Для безопасного пересоздания канала
+    private readonly RabbitMqConf _conf;
 
-
-    public RabbitMqService(IConfiguration configuration, ILogger<RabbitMqService> logger)
+    public RabbitMqService(IConfiguration configuration, ILogger<RabbitMqService> logger, RabbitMqConf conf)
     {
         _logger = logger;
+        _conf = conf;
         _connectionFactory = new ConnectionFactory()
         {
             HostName = configuration["RABBITMQ_HOST"],
@@ -93,15 +94,15 @@ public class RabbitMqService : IDisposable
 
             // Публикуем в ваш AudioProcessingExchange с правильным routingKey
             await _channel.BasicPublishAsync(
-                exchange: RabbitMqConstants.AudioProcessingExchange,
-                routingKey: RabbitMqConstants.DemucsTasksRoutingKey,
+                exchange: _conf.AudioProcessingExchange,
+                routingKey: _conf.DemucsTasksRoutingKey,
                 mandatory: false, // Если true и сообщение не может быть смашрутизировано, оно вернется (событие BasicReturn)
                 basicProperties: properties,
                 body: body);
 
             _logger.LogInformation("Sent Demucs Task to exchange '{ExchangeName}' with key '{RoutingKey}'. TaskId: {TaskId}, Message: {MessageBody}",
-                RabbitMqConstants.AudioProcessingExchange,
-                RabbitMqConstants.DemucsTasksRoutingKey,
+                _conf.AudioProcessingExchange,
+                _conf.DemucsTasksRoutingKey,
                 data.TaskId, // Предполагаем, что у DemucsTaskData есть TaskId
                 messageBody);
         }
