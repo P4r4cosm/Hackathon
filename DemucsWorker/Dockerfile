@@ -1,4 +1,4 @@
-# Используйте конкретный тег, например, с CUDA 11.8 или 12.1, который вам нужен
+# Используйте конкретный тег, например, с CUDA 12.1, который вам нужен
 FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 # Или FROM pytorch/pytorch:2.0.1-cuda11.8-cudnn8-runtime
 
@@ -15,16 +15,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Копируем requirements.txt и устанавливаем зависимости
 COPY requirements.txt .
-# Обновляем pip и устанавливаем зависимости
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
+# Копируем код воркера (предположим, он называется demucs_worker.py)
 COPY app.py .
 
-RUN mkdir -p /data/input /data/output
-VOLUME /data
-
-EXPOSE 5000
-
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "--timeout", "600", "--workers", "1", "app:app"]
+# Команда для запуска воркера
+# Python использует буферизацию вывода по умолчанию.
+# -u гарантирует, что stdout и stderr отправляются напрямую, что полезно для логов Docker.
+CMD ["python3", "-u", "app.py"]

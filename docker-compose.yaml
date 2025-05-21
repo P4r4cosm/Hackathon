@@ -13,6 +13,7 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -110,9 +111,26 @@ services:
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
       - ELASTIC_URI=${ELASTIC_URI}
+
+
+       # --- ПЕРЕМЕННЫЕ ДЛЯ RABBITMQ ---
+      - RABBITMQ_HOSTNAME=rabbitmq # Имя сервиса RabbitMQ
+      - RABBITMQ_PORT=${RABBITMQ_PORT}
+      - RABBITMQ_USERNAME=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
+
+      - RABBITMQ_DEMUCS_QUEUE_NAME=${RABBITMQ_DEMUCS_QUEUE_NAME}
+      - RABBITMQ_DEMUCS_TASKS_ROUTING_KEY=${RABBITMQ_DEMUCS_TASKS_ROUTING_KEY}
+      - RABBITMQ_AUDIO_PROCESSING_EXCHANGE=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE}
+      - RABBITMQ_RESULTS_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME}
+      - RABBITMQ_TASK_RESULTS_QUEUE_NAME=${RABBITMQ_TASK_RESULTS_QUEUE_NAME}
+      - RABBITMQ_TASK_RESULTS_ROUTING_KEY=$"{RABBITMQ_TASK_RESULTS_ROUTING_KEY}"
+
     depends_on:
       - postgres
-
+      - rabbitmq 
+      - minio    
+      - elasticsearch
   frontend:
     build:
       context: . # Контекст сборки - корень проекта
@@ -213,39 +231,67 @@ services:
       # Монтирование в этом сервисе не имеет смысла, так как он не будет запущен.
       # Однако, demucs_models_cache может быть полезен, если demucs/Dockerfile
       # скачивает модели при сборке и кладет их в /data/models.
-      - demucs_models_cache:/data/models 
+      - demucs_models_cache:/data/models
 
-  flask_service:
+
+  demucs_worker: # Новый Python воркер
     build:
-      context: ./FlaskServise       # указываем, где брать контекст сборки
-      dockerfile: Dockerfile
-    container_name: flask_service
+      context: ./DemucsWorker # Предполагается, что Dockerfile и скрипт в этой папке
+      dockerfile: Dockerfile # Имя Dockerfile (из предыдущего ответа)
+    container_name: demucs_worker_1
     restart: unless-stopped
-    ports:
-      - "5001:5000" # Хост:Контейнер
-    volumes:
-      # Используем bind mount для отладки видимости файлов
-      - ./shared_docker_data:/shared_host_mount 
-      - /var/run/docker.sock:/var/run/docker.sock # Монтирование Docker-сокета
-      # - shared_audio_data:/app/shared_audio_data # Временно заменяем именованный том
-    depends_on:
-      - demucs_service # FlaskServise зависит от demucs_service
+    env_file:
+      - .env # Все переменные для RabbitMQ, MinIO и Demucs должны быть здесь
     environment:
-      # Убедитесь, что DEMUCS_CONTAINER_NAME в app.py соответствует имени контейнера demucs_service
-      - DEMUCS_CONTAINER_NAME=demucs_service
-      - DEMUCS_MODEL=${DEMUCS_MODEL} 
-      # SHARED_DIR_FLASK и SHARED_DIR_DEMUCS_CMD_ARG уже определены в app.py как /shared_audio_data
-      # Эти переменные окружения можно также установить здесь, если хотите переопределить значения из app.py
+      # Переопределение или добавление специфичных переменных, если нужно
+      - LOG_LEVEL=INFO # Уровень логирования для воркера
+      # Убедитесь, что эти переменные ниже настроены в .env и совпадают с SoundService
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_DEMUCS_QUEUE_NAME}
+      - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE}
+      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_DEMUCS_TASKS_ROUTING_KEY}
+      - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME}
+      - RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=C5RDgrAREfHtx8lgpayc
+      - MINIO_SECRET_KEY=UYKwpYFjj9ahfea4vCa0ROGhfLiCSsII8LjXwYJc
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - DEMUCS_MODEL=htdemucs_ft # или любая другая модель
+    volumes:
+      - demucs_models_cache:/root/.cache/torch #
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started # Или service_completed_successfully для mc-init
+    # --- Для использования GPU (если Dockerfile собран с поддержкой CUDA) ---
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1 # или 'all' для всех доступных GPU
-              capabilities: [gpu] # 'gpu' - это стандартная возможность для NVIDIA GPU
+              count: 1 # или 'all'
+              capabilities: [gpu]
+  rabbitmq: # Имя сервиса, по которому другие контейнеры будут к нему обращаться
+    image: rabbitmq:3-management-alpine # Образ с UI для управления
+    container_name: rabbitmq_broker # Имя самого контейнера
+    ports:
+      - "5672:5672"  # Порт для AMQP (протокол RabbitMQ)
+      - "15672:15672" # Порт для веб-интерфейса (логин/пароль по умолчанию guest/guest)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq/ # Для сохранения данных RabbitMQ (очередей, сообщений)
+    environment:
+      # Для хакатона можно оставить guest/guest, но для продакшена лучше задать свои
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER} # Использует из .env или guest по умолчанию
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS} # Использует из .env или guest по умолчанию
+    restart: unless-stopped
+    healthcheck: # Опционально, но полезно
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
   # shared_audio_data: {} # Временно не используется
   demucs_models_cache: {} # Том для кэширования моделей Demucs
-    
-
+  rabbitmq_data: {}
