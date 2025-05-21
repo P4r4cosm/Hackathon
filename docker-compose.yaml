@@ -234,33 +234,44 @@ services:
       - demucs_models_cache:/data/models
 
 
-  flask_service:
+  demucs_worker: # Новый Python воркер
     build:
-      context: .
-      dockerfile: FlaskServise/Dockerfile
-    container_name: flask_service
+      context: ./DemucsWorker # Предполагается, что Dockerfile и скрипт в этой папке
+      dockerfile: Dockerfile # Имя Dockerfile (из предыдущего ответа)
+    container_name: demucs_worker_1
     restart: unless-stopped
-    ports:
-      - "5001:5000" # Хост:Контейнер
-    volumes:
-      # Используем bind mount для отладки видимости файлов
-      - ./shared_docker_data:/shared_host_mount 
-      - /var/run/docker.sock:/var/run/docker.sock # Монтирование Docker-сокета
-      # - shared_audio_data:/app/shared_audio_data # Временно заменяем именованный том
-    depends_on:
-      - demucs_service # FlaskServise зависит от demucs_service
+    env_file:
+      - .env # Все переменные для RabbitMQ, MinIO и Demucs должны быть здесь
     environment:
-      # Убедитесь, что DEMUCS_CONTAINER_NAME в app.py соответствует имени контейнера demucs_service
-      - DEMUCS_CONTAINER_NAME=demucs_service 
-      # SHARED_DIR_FLASK и SHARED_DIR_DEMUCS_CMD_ARG уже определены в app.py как /shared_audio_data
-      # Эти переменные окружения можно также установить здесь, если хотите переопределить значения из app.py
-      # --- НОВЫЕ ПЕРЕМЕННЫЕ ДЛЯ RABBITMQ ---
-      - RABBITMQ_HOSTNAME=rabbitmq
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_USERNAME=${RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
-      - RESULTS_QUEUE_NAME=audio_results
-      - AUDIO_PROCESSING_QUEUE_NAME=audio_processing_tasks # Та же очередь
+      # Переопределение или добавление специфичных переменных, если нужно
+      - LOG_LEVEL=INFO # Уровень логирования для воркера
+      # Убедитесь, что эти переменные ниже настроены в .env и совпадают с SoundService
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_DEMUCS_QUEUE_NAME}
+      - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE}
+      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_DEMUCS_TASKS_ROUTING_KEY}
+      - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME}
+      - RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=C5RDgrAREfHtx8lgpayc
+      - MINIO_SECRET_KEY=UYKwpYFjj9ahfea4vCa0ROGhfLiCSsII8LjXwYJc
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - DEMUCS_MODEL=htdemucs_ft # или любая другая модель
+    volumes:
+      - demucs_models_cache:/root/.cache/torch #
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started # Или service_completed_successfully для mc-init
+    # --- Для использования GPU (если Dockerfile собран с поддержкой CUDA) ---
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1 # или 'all'
+              capabilities: [gpu]
   rabbitmq: # Имя сервиса, по которому другие контейнеры будут к нему обращаться
     image: rabbitmq:3-management-alpine # Образ с UI для управления
     container_name: rabbitmq_broker # Имя самого контейнера
