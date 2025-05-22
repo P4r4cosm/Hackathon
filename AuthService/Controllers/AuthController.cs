@@ -1,12 +1,15 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using AuthService.Data;
 using AuthService.Models;
 using AuthService.Models.DTO;
+using AuthService.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -20,17 +23,50 @@ public class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthController> _logger;
-    private readonly IOptionsMonitor<GoogleOptions> _googleOptionsMonitor;
+    private readonly ApplicationDbContext _context;
+
+    private readonly ITokenService _tokenService;
 
     public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager,
-        IConfiguration configuration, ILogger<AuthController> logger)
+        IConfiguration configuration, ILogger<AuthController> logger, ITokenService tokenService,
+        ApplicationDbContext context)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _configuration = configuration;
         _logger = logger;
+        _tokenService = tokenService;
+        _context = context;
     }
+    //Метод для установления Cookies
+    private void SetTokensInCookies(string accessToken, DateTime accessTokenExpires, string refreshToken, DateTime refreshTokenExpires)
+    {
+        Response.Cookies.Append("access_token", accessToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true, 
+            Expires = accessTokenExpires,
+            SameSite = SameSiteMode.Lax,
+            Path = "/"
+        });
 
+        Response.Cookies.Append("refresh_token", refreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            Expires = refreshTokenExpires,
+            SameSite = SameSiteMode.Lax,
+            Path = "/refresh" 
+        });
+    }
+    private void DeleteAuthCookies()
+    {
+        var cookieOptions = new CookieOptions { Secure = true, HttpOnly = true, SameSite = SameSiteMode.Lax, Path = "/" };
+        Response.Cookies.Delete("access_token", cookieOptions);
+        cookieOptions.Path = "/refresh"; // Путь для refresh_token
+        Response.Cookies.Delete("refresh_token", cookieOptions);
+    }
+    
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterModel model)
     {
@@ -49,6 +85,7 @@ public class AuthController : ControllerBase
         return BadRequest(result.Errors);
     }
 
+    // --- Обновленные методы логина ---
     [HttpPost("loginByEmail")]
     public async Task<IActionResult> LoginByEmail(LoginEmailModel emailModel)
     {
@@ -58,18 +95,33 @@ public class AuthController : ControllerBase
             return Unauthorized(new { Message = "Invalid credentials" });
         }
 
-        var result = await _signInManager.CheckPasswordSignInAsync(user, emailModel.Password, lockoutOnFailure: false);
-        if (result.Succeeded)
+        // Используйте CheckPasswordAsync, если не хотите побочных эффектов SignInManager с куками Identity
+        var passwordValid = await _userManager.CheckPasswordAsync(user, emailModel.Password);
+        if (passwordValid)
+        // Или если хотите использовать SignInManager:
+        // var result = await _signInManager.CheckPasswordSignInAsync(user, emailModel.Password, lockoutOnFailure: false);
+        // if (result.Succeeded)
         {
+            await _signInManager.SignOutAsync(); // Очищаем старые сессии Identity, если они были
+
             var roles = await _userManager.GetRolesAsync(user);
-            var token = GenerateJwtToken(user, roles);
-            Response.Cookies.Append("auth_token", token, new CookieOptions
+            var accessToken = _tokenService.GenerateAccessToken(user, roles);
+            var accessTokenDuration = TimeSpan.FromMinutes(Convert.ToDouble(_configuration["JwtSettings:AccessTokenDurationInMinutes"]));
+
+            var refreshTokenValue = _tokenService.GenerateRefreshTokenValue();
+            var refreshTokenEntity = new RefreshToken
             {
-                HttpOnly = true,
-                Secure = true,
-                Expires = DateTime.UtcNow.AddDays(7)
-            });
-            return Ok(new { Message = "Login successful" });
+                UserId = user.Id,
+                Token = refreshTokenValue,
+                Expires = DateTime.UtcNow.AddDays(Convert.ToDouble(_configuration["JwtSettings:RefreshTokenDurationInDays"]))
+            };
+            _context.RefreshTokens.Add(refreshTokenEntity);
+            await _context.SaveChangesAsync();
+
+            SetTokensInCookies(accessToken, DateTime.UtcNow.Add(accessTokenDuration), refreshTokenValue, refreshTokenEntity.Expires);
+
+            _logger.LogInformation("User {Email} logged in successfully via email.", user.Email);
+            return Ok(new { Message = "Login successful", UserId = user.Id });
         }
 
         return Unauthorized(new { Message = "Invalid credentials" });
@@ -78,26 +130,40 @@ public class AuthController : ControllerBase
     [HttpPost("loginByName")]
     public async Task<IActionResult> LoginByName(LoginNameModel nameModel)
     {
-        var result = await _signInManager.PasswordSignInAsync(nameModel.Name, nameModel.Password, isPersistent: false,
-            lockoutOnFailure: false);
-
-        if (result.Succeeded)
+        var user = await _userManager.FindByNameAsync(nameModel.Name);
+        if (user == null)
         {
-            var user = await _userManager.FindByNameAsync(nameModel.Name);
-            var role = await _userManager.GetRolesAsync(user!);
-            var token = GenerateJwtToken(user!, role);
+            return Unauthorized(new { Message = "Invalid credentials" });
+        }
 
-            Response.Cookies.Append("auth_token", token, new CookieOptions
+        var passwordValid = await _userManager.CheckPasswordAsync(user, nameModel.Password);
+        if (passwordValid)
+        {
+            await _signInManager.SignOutAsync(); // Очищаем старые сессии Identity
+
+            var roles = await _userManager.GetRolesAsync(user);
+            var accessToken = _tokenService.GenerateAccessToken(user, roles);
+            var accessTokenDuration = TimeSpan.FromMinutes(Convert.ToDouble(_configuration["JwtSettings:AccessTokenDurationInMinutes"]));
+
+            var refreshTokenValue = _tokenService.GenerateRefreshTokenValue();
+            var refreshTokenEntity = new RefreshToken
             {
-                HttpOnly = true,
-                Secure = true,
-                Expires = DateTime.UtcNow.AddDays(7)
-            });
-            return Ok(new { Message = "Login successful" });
+                UserId = user.Id,
+                Token = refreshTokenValue,
+                Expires = DateTime.UtcNow.AddDays(Convert.ToDouble(_configuration["JwtSettings:RefreshTokenDurationInDays"]))
+            };
+            _context.RefreshTokens.Add(refreshTokenEntity);
+            await _context.SaveChangesAsync();
+
+            SetTokensInCookies(accessToken, DateTime.UtcNow.Add(accessTokenDuration), refreshTokenValue, refreshTokenEntity.Expires);
+            
+            _logger.LogInformation("User {UserName} logged in successfully by name.", user.UserName);
+            return Ok(new { Message = "Login successful", UserId = user.Id });
         }
 
         return Unauthorized(new { Message = "Invalid credentials" });
     }
+
 
     [HttpGet("google-login")]
     public IActionResult GoogleLogin(string? returnUrl = null)
@@ -249,43 +315,120 @@ public class AuthController : ControllerBase
             }
         }
 
-        if (user == null) // Дополнительная проверка, если user не был установлен
+        if (user != null) // Убедитесь, что user не null
         {
-            // Попытка найти пользователя снова, если он был создан, но signInResult не был Succeeded сразу
-            if (info.Principal.FindFirstValue(ClaimTypes.Email) != null)
-            {
-                user = await _userManager.FindByEmailAsync(info.Principal.FindFirstValue(ClaimTypes.Email));
-            }
+            await _signInManager.SignOutAsync(); // Очищаем сессию Identity от внешнего провайдера
 
-            if (user == null) // Если все еще не нашли
+            var roles = await _userManager.GetRolesAsync(user);
+            var accessToken = _tokenService.GenerateAccessToken(user, roles);
+            var accessTokenDuration = TimeSpan.FromMinutes(Convert.ToDouble(_configuration["JwtSettings:AccessTokenDurationInMinutes"]));
+
+            var refreshTokenValue = _tokenService.GenerateRefreshTokenValue();
+            var refreshTokenEntity = new RefreshToken
             {
-                _logger.LogError(
-                    "User object is null after external login process for {LoginProvider} - {ProviderKey}. This should not happen.",
-                    info.LoginProvider, info.ProviderKey);
-                return Redirect(frontendRedirectUrl + (frontendRedirectUrl.Contains("?") ? "&" : "?") +
-                                "error=critical_external_login_error_user_null");
-            }
+                UserId = user.Id,
+                Token = refreshTokenValue,
+                Expires = DateTime.UtcNow.AddDays(Convert.ToDouble(_configuration["JwtSettings:RefreshTokenDurationInDays"]))
+            };
+            _context.RefreshTokens.Add(refreshTokenEntity);
+            await _context.SaveChangesAsync();
+
+            SetTokensInCookies(accessToken, DateTime.UtcNow.Add(accessTokenDuration), refreshTokenValue, refreshTokenEntity.Expires);
+
+            _logger.LogInformation("User {Email} logged in via {LoginProvider}. JWTs set in cookies. Redirecting to {FrontendRedirectUrl}",
+                user.Email, info?.LoginProvider ?? "UnknownProvider", frontendRedirectUrl);
+            return Redirect(frontendRedirectUrl);
+        }
+        else
+        {
+            _logger.LogError("User object is null at the end of external login process for {LoginProvider}. This should not happen.", info?.LoginProvider ?? "UnknownProvider");
+            return Redirect(frontendRedirectUrl + (frontendRedirectUrl.Contains("?") ? "&" : "?") + "error=critical_external_login_error");
+        }
+    }
+     [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh()
+    {
+        if (!Request.Cookies.TryGetValue("refresh_token", out var oldRefreshTokenValue))
+        {
+            _logger.LogWarning("Refresh endpoint called without refresh_token cookie.");
+            return Unauthorized(new { Message = "Refresh token not found." });
         }
 
-        // На этом этапе user должен быть не null
+        var storedRefreshToken = await _context.RefreshTokens
+            .Include(rt => rt.User) // Важно, чтобы получить пользователя для генерации нового access token'а
+            .FirstOrDefaultAsync(rt => rt.Token == oldRefreshTokenValue);
+
+        if (storedRefreshToken == null)
+        {
+            _logger.LogWarning("Refresh token from cookie not found in DB: {RefreshToken}", oldRefreshTokenValue);
+            DeleteAuthCookies(); // Если токен не найден, удаляем куки на всякий случай
+            return Unauthorized(new { Message = "Invalid refresh token." });
+        }
+
+        if (!storedRefreshToken.IsActive)
+        {
+            _logger.LogWarning("Inactive refresh token used. Token: {RefreshToken}, Expires: {Expires}, Revoked: {Revoked}",
+                storedRefreshToken.Token, storedRefreshToken.Expires, storedRefreshToken.Revoked);
+            // (Опционально, но рекомендуется для безопасности) Если кто-то пытается использовать неактивный токен,
+            // можно отозвать все активные токены этого пользователя.
+            // await RevokeAllUserRefreshTokens(storedRefreshToken.UserId, "Attempted use of inactive token");
+            DeleteAuthCookies();
+            return Unauthorized(new { Message = "Refresh token has expired or been revoked." });
+        }
+
+        var user = storedRefreshToken.User;
+        if (user == null) // Дополнительная проверка
+        {
+             _logger.LogError("User not found for active refresh token. UserId: {UserId}", storedRefreshToken.UserId);
+             DeleteAuthCookies();
+             return Unauthorized(new { Message = "User associated with refresh token not found." });
+        }
+
+        // --- Refresh Token Rotation (Рекомендуется) ---
+        var newRefreshTokenValue = _tokenService.GenerateRefreshTokenValue();
+        var newRefreshTokenEntity = new RefreshToken
+        {
+            UserId = user.Id,
+            Token = newRefreshTokenValue,
+            Expires = DateTime.UtcNow.AddDays(Convert.ToDouble(_configuration["JwtSettings:RefreshTokenDurationInDays"]))
+        };
+        _context.RefreshTokens.Add(newRefreshTokenEntity);
+
+        storedRefreshToken.Revoked = DateTime.UtcNow;
+        storedRefreshToken.ReplacedByToken = newRefreshTokenValue; // Для отслеживания
+        // ----------------------------------------------
+
         var roles = await _userManager.GetRolesAsync(user);
-        var token = GenerateJwtToken(user, roles);
-        SetAuthCookie(token); // Используем новый метод для установки cookie
+        var newAccessToken = _tokenService.GenerateAccessToken(user, roles);
+        var newAccessTokenDuration = TimeSpan.FromMinutes(Convert.ToDouble(_configuration["JwtSettings:AccessTokenDurationInMinutes"]));
 
-        _logger.LogInformation(
-            "JWT token generated and cookie set for user {Email} after {LoginProvider} login. Redirecting to frontend: {FrontendRedirectUrl}",
-            user.Email, info.LoginProvider, frontendRedirectUrl);
+        SetTokensInCookies(newAccessToken, DateTime.UtcNow.Add(newAccessTokenDuration), newRefreshTokenValue, newRefreshTokenEntity.Expires);
 
-        return Redirect(frontendRedirectUrl); // Перенаправляем на фронтенд
+        await _context.SaveChangesAsync(); // Сохраняем изменения (включая отзыв старого RT и добавление нового)
+
+        _logger.LogInformation("Token refreshed successfully for user {UserId}.", user.Id);
+        return Ok(new { Message = "Token refreshed successfully" });
     }
 
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
-        await _signInManager.SignOutAsync(); // Выход из системы Identity (удаляет cookie аутентификации Identity)
-        Response.Cookies.Delete("auth_token",
-            new CookieOptions { Secure = true, HttpOnly = true, SameSite = SameSiteMode.Lax }); // Удаляем JWT cookie
-        _logger.LogInformation("User logged out.");
+        if (Request.Cookies.TryGetValue("refresh_token", out var refreshTokenValue))
+        {
+            var storedRefreshToken = await _context.RefreshTokens
+                .FirstOrDefaultAsync(rt => rt.Token == refreshTokenValue);
+
+            if (storedRefreshToken != null && storedRefreshToken.IsActive)
+            {
+                storedRefreshToken.Revoked = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Refresh token revoked for user {UserId} on logout.", storedRefreshToken.UserId);
+            }
+        }
+        // await _signInManager.SignOutAsync(); // Это удаляет куки Identity, если они есть.
+        // В нашей схеме с JWT в куках, это не так критично, но не повредит.
+        DeleteAuthCookies();
+        _logger.LogInformation("User logged out and auth cookies deleted.");
         return Ok(new { Message = "Logged out successfully" });
     }
 
