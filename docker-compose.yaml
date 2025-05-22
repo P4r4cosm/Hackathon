@@ -40,6 +40,8 @@ services:
       - JwtSettings__Issuer=${JwtSettings__Issuer}
       - JwtSettings__Audience=${JwtSettings__Audience}
       - JwtSettings__DurationInHours=${JwtSettings__DurationInHours}
+      - JwtSettings__AccessTokenDurationInMinutes=${JwtSettings__AccessTokenDurationInMinutes}
+      - JwtSettings__RefreshTokenDurationInDays=${JwtSettings__RefreshTokenDurationInDays}
       - AUTHENTICATION__GOOGLE__CLIENTID=${AUTHENTICATION__GOOGLE__CLIENTID}
       - AUTHENTICATION__GOOGLE__CLIENTSECRET=${AUTHENTICATION__GOOGLE__CLIENTSECRET}
       # Настройки для HTTPS

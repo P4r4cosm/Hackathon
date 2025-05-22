@@ -2,6 +2,7 @@
 using AuthService.Extensions;
 using AuthService.Infrastructure;
 using AuthService.Services;
+using AuthService.Services.Interfaces;
 using DotNetEnv;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -74,7 +75,11 @@ services.AddAuthorization(options =>
         policy.RequireRole("user"));
 });
 
-builder.Services.AddCors(options =>
+//TokenService
+services.AddScoped<ITokenService, TokenService>();
+
+
+services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policyBuilder =>
     {
