@@ -90,7 +90,7 @@ public class AudioController : ControllerBase
                     Text = "Не обработан"
                 }
             };
-    
+            
             _logger.LogInformation("Saving record to elastic...");
             await _audioRecordRepository.SaveAsync(audioRecordElastic);
 
@@ -199,20 +199,20 @@ public class AudioController : ControllerBase
     }
     
     [HttpGet("genres_tracks")]
-    public async Task<IActionResult> GetAllGenresTracks(int id, int from, int count)
+    public async Task<IActionResult> GetAllGenresTracksById(int id, int from, int count)
     {
-        return Ok(await _audioRecordRepository.GetTracksByGenre(id, from, count));
+        return Ok(await _audioRecordRepository.GetTracksByGenreId(id, from, count));
     }
     
-    [HttpGet("tag_tracks")]
     
-    public async Task<IActionResult> GetAllTagTracks(int id, int from, int count)
+    [HttpPost("tag_tracks")]
+    public async Task<IActionResult> GetAllTagTracks(IEnumerable<string> tags, int from, int count)
     {
-        return Ok(await _audioRecordRepository.GetTracksByAuthor(id, from, count));
+        return Ok(await _audioRecordRepository.GetTracksByThematicTags(tags, from, count));
     }
-    [HttpGet("keyword_tracks")]
-    public async Task<IActionResult> GetAllKeywordTracks(int id, int from, int count)
+    [HttpPost("keyword_tracks")]
+    public async Task<IActionResult> GetAllKeywordTracks(IEnumerable<string> keywords, int from, int count)
     {
-        return Ok(await _audioRecordRepository.GetTracksByAuthor(id, from, count));
+        return Ok(await _audioRecordRepository.GetTracksByKeywords(keywords, from, count));
     }
 }

@@ -139,22 +139,79 @@ public class AudioRecordRepository
         return response.Documents.ToList();
     }
 
-    public async Task<List<AudioRecordForElastic>> GetTracksByGenre(int genreId, int from, int size)
+    public async Task<List<AudioRecordForElastic>> GetTracksByGenreId(int genreId, int from, int size)
     {
         var response = await _elasticClient.SearchAsync<AudioRecordForElastic>(s => s
             .Index("audio_records")
             .From(from)
             .Size(size)
-            .Query(nq => nq // Запрос внутри nested-объекта (nq - это QueryContainer)
-                .Term(t => t // Конфигуратор для TermQuery
-                    .Field(f => f.Genres[0].Name) // Указываем поле Id внутри объекта GenreDocument
-                    // f.Genres[0] - это просто для доступа к типу GenreDocument,
-                    // Elasticsearch поймет, что искать нужно по всем элементам массива.
-                    .Value("Synthpunk")
+            .Query(q => q
+                .Nested(n => n
+                    .Path(p => p.Genres) // Указываем путь до nested-объектов
+                    .Query(nq => nq
+                        .Term(t => t
+                                .Field(f => f.Genres[0].Id) // Поле Id внутри Genre
+                                .Value(genreId.ToString()) // TermQuery требует строку
+                        )
+                    )
                 )
             )
         );
 
+        if (!response.IsValidResponse)
+        {
+            _logger.LogError("Error fetching tracks by genre from Elasticsearch: {DebugInfo}",
+                response.DebugInformation);
+            return new List<AudioRecordForElastic>();
+        }
+
+        return response.Documents.ToList();
+    }
+
+    public async Task<List<AudioRecordForElastic>> GetTracksByKeywords(IEnumerable<string> keywords, int from, int size)
+    {
+        var response = await _elasticClient.SearchAsync<AudioRecordForElastic>(s => s
+            .Index("audio_records") // Указываем индекс
+            .From(from) // Для пагинации
+            .Size(size) // Для пагинации
+            .Query(q => q
+                .Terms(t => t // Используем Terms query
+                        .Field(f => f.Keywords) // Указываем поле для поиска
+
+                        //.Terms(new TermsQueryField(keywords.Cast<object>().ToList())) // Для NEST 7.x
+                        .Terms(new TermsQueryField(keywords.Select(name => FieldValue.String(name))
+                            .ToArray())) // Для Elastic.Clients.Elasticsearch 8.x
+                   
+                )
+            )
+        );
+        if (!response.IsValidResponse)
+        {
+            _logger.LogError("Error fetching tracks by genre from Elasticsearch: {DebugInfo}",
+                response.DebugInformation);
+            return new List<AudioRecordForElastic>();
+        }
+
+        return response.Documents.ToList();
+    }
+
+    public async Task<List<AudioRecordForElastic>> GetTracksByThematicTags(IEnumerable<string> tags, int from, int size)
+    {
+        var response = await _elasticClient.SearchAsync<AudioRecordForElastic>(s => s
+            .Index("audio_records") // Указываем индекс
+            .From(from) // Для пагинации
+            .Size(size) // Для пагинации
+            .Query(q => q
+                .Terms(t => t // Используем Terms query
+                        .Field(f => f.ThematicTags) // Указываем поле для поиска
+
+                        //.Terms(new TermsQueryField(keywords.Cast<object>().ToList())) // Для NEST 7.x
+                        .Terms(new TermsQueryField(tags.Select(name => FieldValue.String(name))
+                            .ToArray())) // Для Elastic.Clients.Elasticsearch 8.x
+                   
+                )
+            )
+        );
         if (!response.IsValidResponse)
         {
             _logger.LogError("Error fetching tracks by genre from Elasticsearch: {DebugInfo}",
