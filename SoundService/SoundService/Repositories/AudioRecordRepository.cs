@@ -61,7 +61,23 @@ public class AudioRecordRepository
     
         return response.Documents.ToList();
     }
-    
+
+    public async Task<List<Author>> GetAllAuthorsAsync()
+    {
+        return await _dbContext.Authors.ToListAsync();
+    }
+    public async Task<List<Genre>> GetAllGenresAsync()
+    {
+        return await _dbContext.Genres.ToListAsync();
+    }
+    public async Task<List<ThematicTag>> GetAllThematicTagsAsync()
+    {
+        return await _dbContext.ThematicTags.ToListAsync();
+    }
+    public async Task<List<Keyword>> GetAllKeywordsAsync()
+    {
+        return await _dbContext.Keywords.ToListAsync();
+    }
     public async Task<AudioRecordForElastic?> GetTrackTextByIdAsync(int id)
     {
         var response = await _elasticClient.GetAsync<AudioRecordForElastic>(id);

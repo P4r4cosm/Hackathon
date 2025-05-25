@@ -12,8 +12,6 @@ public static class AudioRecordConverter
             Title = audioRecord.Title,
             AuthorName = audioRecord.Author.Name,
             AuthorId = audioRecord.AuthorId,
-            //Genre = audioRecord.Genre.Name,
-            //GenreId = audioRecord.GenreId,
             Genres = audioRecord.AudioGenres.Select(ag => ag.Genre).ToList(),
             Year = audioRecord.Year,
             AlbumTitle = audioRecord.Album.Title,

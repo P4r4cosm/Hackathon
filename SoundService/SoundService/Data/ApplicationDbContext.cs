@@ -15,9 +15,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<Album> Albums { get; set; }
     public DbSet<Genre> Genres { get; set; }
     public DbSet<AudioGenre> AudioGenres { get; set; }
-    public DbSet<AudioKeyword> Keywords { get; set; }
+    public DbSet<Keyword> Keywords { get; set; }
     public DbSet<AudioKeyword> AudioKeywords { get; set; }
-    public DbSet<AudioThematicTag> ThematicTags { get; set; }
+    public DbSet<ThematicTag> ThematicTags { get; set; }
     public DbSet<AudioThematicTag> AudioThematicTags { get; set; }
     //public DbSet<TranscriptSegment> TranscriptSegments { get; set; }
     public DbSet<ModerationStatus> ModerationStatuses { get; set; }

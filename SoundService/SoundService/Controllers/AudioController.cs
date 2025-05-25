@@ -130,17 +130,28 @@ public class AudioController : ControllerBase
         return Ok(audioList);
     }
 
-    [HttpGet("track/{id}")]
-    public async Task<IActionResult> GetTrackById(int id)
+    [HttpGet("authors")]
+    public async Task<IActionResult> GetAllAuthors()
     {
-        var audio = await _audioRecordRepository.GetTrackTextByIdAsync(id);
-        return Ok(audio);
+        return Ok(await _audioRecordRepository.GetAllAuthorsAsync());
     }
 
-    [HttpGet("track_text/{id}")]
-    public async Task<IActionResult> GetTrackTextById(int id)
+    [HttpGet("genres")]
+    public async Task<IActionResult> GetAllGenres()
     {
-        var audioElastic = await _audioRecordRepository.GetTrackTextByIdAsync(id);
-        return Ok(audioElastic);
+        return Ok(await _audioRecordRepository.GetAllGenresAsync());
     }
+
+    [HttpGet("tags")]
+    public async Task<IActionResult> GetAllTags()
+    {
+        return Ok(await _audioRecordRepository.GetAllThematicTagsAsync());
+    }
+
+    [HttpGet("keywords")]
+    public async Task<IActionResult> GetAllKeywords()
+    {
+        return Ok(await _audioRecordRepository.GetAllKeywordsAsync());
+    }
+    
 }

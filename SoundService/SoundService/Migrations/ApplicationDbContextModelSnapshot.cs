@@ -91,7 +91,7 @@ namespace SoundService.Migrations
 
                     b.HasIndex("KeywordId");
 
-                    b.ToTable("AudioKeyword");
+                    b.ToTable("AudioKeywords");
                 });
 
             modelBuilder.Entity("SoundService.Models.AudioRecord", b =>
@@ -154,7 +154,7 @@ namespace SoundService.Migrations
 
                     b.HasIndex("ThematicTagId");
 
-                    b.ToTable("AudioThematicTag");
+                    b.ToTable("AudioThematicTags");
                 });
 
             modelBuilder.Entity("SoundService.Models.Genre", b =>
@@ -188,7 +188,7 @@ namespace SoundService.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Keyword");
+                    b.ToTable("Keywords");
                 });
 
             modelBuilder.Entity("SoundService.Models.ModerationStatus", b =>
@@ -236,7 +236,7 @@ namespace SoundService.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ThematicTag");
+                    b.ToTable("ThematicTags");
                 });
 
             modelBuilder.Entity("SoundService.Models.Album", b =>
