@@ -21,6 +21,7 @@ public class AudioRecordForElastic
     public List<string> ThematicTags { get; set; }   // Список названий тегов ["патриотические", "победа"]
     public List<int> ThematicTagIds { get; set; }    // Список ID тегов, если фильтрация по ним
     public List<string> Keywords { get; set; }       // Из AudioKeywords, если они тоже участвуют в поиске
+    
     public ModerationState ModerationStatus { get; set; }     // Например, "Approved", "Pending"
     
     public TimeSpan Duration { get; set; }
