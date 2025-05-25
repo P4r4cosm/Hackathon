@@ -106,45 +106,6 @@ const TopPlay = () => {
           )}
         </div>
       </div>
-
-      <div className="w-full flex flex-col mt-8">
-        <div className="flex flex-row justify-between items-center">
-          <h2 className="text-white font-bold text-2xl">Популярные авторы</h2>
-          <Link to="/top-artists">
-            <p className="text-gray-300 text-base cursor-pointer">Больше</p>
-          </Link>
-        </div>
-
-        <Swiper
-          slidesPerView="auto"
-          spaceBetween={15}
-          freeMode
-          centeredSlides
-          centeredSlidesBounds
-          modules={[FreeMode]}
-          className="mt-4"
-        >
-          {authors && authors.length > 0 ? (
-            authors.slice(0, 5).map((author, index) => (
-              <SwiperSlide
-                key={author?.id || index}
-                style={{ width: '25%', height: 'auto' }}
-                className="shadow-lg rounded-full animate-slideright"
-              >
-                <Link to={author?.id ? `/authors/${author.id}` : '#'}>
-                  <img 
-                    src={author?.imageUrl || '/assets/default-artist.png'} 
-                    alt={author?.name || 'Автор'} 
-                    className="rounded-full w-full object-cover"
-                  />
-                </Link>
-              </SwiperSlide>
-            ))
-          ) : (
-            <p className="text-gray-400 text-sm py-2">Авторы не найдены</p>
-          )}
-        </Swiper>
-      </div>
     </div>
   );
 };

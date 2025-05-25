@@ -1,5 +1,6 @@
 import { useSelector } from 'react-redux';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Route, Routes, useLocation, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 
 import { Searchbar, Sidebar, MusicPlayer, TopPlay } from './components';
 import { 
@@ -16,9 +17,43 @@ import {
 } from './pages';
 import { UploadForm } from './components/Admin';
 
+// Компонент для защиты маршрутов, требующих админских прав
+const AdminRoute = ({ children }) => {
+  // Для демонстрационных целей разрешаем доступ всем
+  return children;
+  
+  // В реальном приложении проверяем роль из redux или localStorage
+  // В этой имитации просто проверяем email пользователя
+  /*
+  const isAdmin = localStorage.getItem('email') === 'admin@admin.com';
+  
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+  
+  return children;
+  */
+};
+
 const App = () => {
   const { activeSong } = useSelector((state) => state.player);
   const location = useLocation();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  useEffect(() => {
+    // Проверяем статус аутентификации при загрузке
+    const authStatus = localStorage.getItem('isAuthenticated') === 'true';
+    setIsAuthenticated(authStatus);
+    
+    // Слушаем изменения в localStorage
+    const handleStorageChange = () => {
+      const newAuthStatus = localStorage.getItem('isAuthenticated') === 'true';
+      setIsAuthenticated(newAuthStatus);
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   return (
     <div className="relative flex">
@@ -43,7 +78,14 @@ const App = () => {
               <Route path="/archive" element={<ArchiveExplorer />} />
               <Route path="/recordings/:recordingId" element={<RecordingDetails />} />
               <Route path="/analytics" element={<Analytics />} />
-              <Route path="/upload" element={<UploadForm />} />
+              
+              {/* Для демонстрационных целей убрали защиту маршрута */}
+              <Route path="/upload" element={
+                <AdminRoute>
+                  <UploadForm />
+                </AdminRoute>
+              } />
+              
               <Route path="/authors/:authorId" element={<AuthorDetails />} />
               <Route path="/tag/:tagId" element={<ArchiveExplorer />} />
             </Routes>

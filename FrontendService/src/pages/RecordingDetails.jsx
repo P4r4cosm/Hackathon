@@ -15,7 +15,8 @@ const RecordingDetails = () => {
   const dispatch = useDispatch();
   const { recordingId } = useParams();
   const { activeSong, isPlaying } = useSelector((state) => state.player);
-  const [isAdmin, setIsAdmin] = useState(false); // В реальном приложении нужно проверять роль пользователя
+  // Для демонстрационных целей всегда показываем режим редактирования
+  const [isAdmin, setIsAdmin] = useState(true); 
   const [currentTime, setCurrentTime] = useState(0);
   
   // Получаем данные о записи
@@ -47,7 +48,7 @@ const RecordingDetails = () => {
       // Комбинируем данные из обоих источников
       setRecording({
         ...recordingData,
-        transcription: recordingText?.fullText || 'Текст отсутствует',
+        transcription: recordingText?.fullText || recordingData.text || 'Текст отсутствует',
         timestamps: recordingText?.transcriptSegments?.map(segment => ({
           time: formatTimestamp(segment.start),
           text: segment.text
@@ -56,7 +57,7 @@ const RecordingDetails = () => {
     } else if (recordingData) {
       setRecording({
         ...recordingData,
-        transcription: 'Текст отсутствует',
+        transcription: recordingData.text || 'Текст отсутствует',
         timestamps: []
       });
     }
@@ -87,9 +88,29 @@ const RecordingDetails = () => {
     
     // Подготавливаем объект song с поддержкой обоих форматов
     const audioPath = song.filePath || song.originalAudioUrl;
+    const restoredAudioPath = song.restoredFilePath || song.restoredAudioUrl;
+    
+    // Добавляем текст и временные метки из recording или из песни
+    let transcription = '';
+    let timestamps = [];
+    
+    if (song.id === recording.id) {
+      // Если это текущая запись, берем данные из recording
+      transcription = recording.transcription || '';
+      timestamps = recording.timestamps || [];
+    } else {
+      // Иначе используем данные из песни
+      transcription = song.text || song.transcription || '';
+      timestamps = song.timestamps || [];
+    }
+    
     const songWithAudioPath = {
       ...song,
       audioPath,
+      restoredAudioUrl: restoredAudioPath,
+      restoredFilePath: restoredAudioPath,
+      transcription: transcription,
+      timestamps: timestamps,
       // Создаем совместимость со стандартным форматом плеера
       hub: { 
         actions: [

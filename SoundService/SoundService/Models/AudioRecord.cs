@@ -15,7 +15,8 @@ public class AudioRecord
     public  Genre Genre { get; set; }
 
     public TimeSpan Duration { get; set; }
-    public string FilePath { get; set; }             // Путь к файлу
+    public string FilePath { get; set; }             // Путь к оригинальному файлу
+    public string? RestoredFilePath { get; set; }     // Путь к восстановленному файлу
     public long FileSizeBytes { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     public string? UploadUserId { get; set; }         // Кто загрузил

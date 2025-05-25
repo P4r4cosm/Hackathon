@@ -55,7 +55,28 @@ public static class AuthorizationExtensions
             try
             {
                 logger.LogInformation("Начинаю миграцию базы данных AuthService...");
-                db.Database.EnsureCreated();
+                
+                // Проверяем существование таблицы AspNetRoles
+                bool tableExists = false;
+                try
+                {
+                    // Пробуем выполнить запрос к таблице AspNetRoles
+                    db.Database.ExecuteSqlRaw("SELECT 1 FROM \"AspNetRoles\" LIMIT 1");
+                    tableExists = true;
+                }
+                catch
+                {
+                    logger.LogInformation("Таблица AspNetRoles не существует, требуется создание схемы");
+                    tableExists = false;
+                }
+                
+                if (!tableExists)
+                {
+                    // Если таблица не существует, принудительно создаем схему
+                    logger.LogInformation("Создаю схему базы данных для Identity");
+                    db.Database.EnsureCreated();
+                }
+                
                 logger.LogInformation("Миграция базы данных AuthService успешно завершена");
             }
             catch (Exception ex)

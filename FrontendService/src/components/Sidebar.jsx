@@ -17,10 +17,7 @@ const links = [
   { name: 'Военный архив', to: '/', icon: HiOutlineHome },
   { name: 'Аналитика', to: '/analytics', icon: HiOutlineChartBar },
   { name: 'Загрузить запись', to: '/upload', icon: HiOutlineUpload },
-  { name: 'Старое приложение', to: '/discover', icon: HiOutlinePhotograph, divider: true },
-  { name: 'По странам', to: '/around-you', icon: HiOutlinePhotograph },
   { name: 'Исполнители', to: '/top-artists', icon: HiOutlineUserGroup },
-  { name: 'Топ-чарты', to: '/top-charts', icon: HiOutlineHashtag },
 ];
 
 const NavLinks = ({ handleClick }) => (

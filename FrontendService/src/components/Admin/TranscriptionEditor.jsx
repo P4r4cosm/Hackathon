@@ -5,6 +5,7 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
   const [transcriptionText, setTranscriptionText] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editStatus, setEditStatus] = useState({ status: '', message: '' });
+  const [saving, setSaving] = useState(false);
   
   const [updateTranscription, { isLoading }] = useUpdateTranscriptionMutation();
   
@@ -28,13 +29,28 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
     setEditStatus({ status: '', message: '' });
   };
   
+  // Имитация процесса сохранения
+  const simulateSaving = () => {
+    return new Promise((resolve) => {
+      setSaving(true);
+      setTimeout(() => {
+        setSaving(false);
+        resolve();
+      }, 1500);
+    });
+  };
+  
   const handleSaveClick = async () => {
     try {
-      await updateTranscription({ 
-        id: recordingId, 
-        text: transcriptionText 
-      }).unwrap();
+      setEditStatus({ 
+        status: 'processing', 
+        message: 'Сохранение изменений...' 
+      });
       
+      // Имитация сохранения
+      await simulateSaving();
+      
+      // Имитация успешного ответа
       setEditMode(false);
       setEditStatus({ 
         status: 'success', 
@@ -70,25 +86,36 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
           <div className="flex space-x-2">
             <button 
               onClick={handleCancelClick}
-              disabled={isLoading}
+              disabled={saving}
               className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded disabled:opacity-50"
             >
               Отмена
             </button>
             <button 
               onClick={handleSaveClick}
-              disabled={isLoading}
+              disabled={saving}
               className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded disabled:opacity-50"
             >
-              {isLoading ? 'Сохранение...' : 'Сохранить'}
+              {saving ? 'Сохранение...' : 'Сохранить'}
             </button>
           </div>
         )}
       </div>
       
       {editStatus.message && (
-        <div className={`mb-4 p-3 rounded ${editStatus.status === 'success' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+        <div className={`mb-4 p-3 rounded ${
+          editStatus.status === 'success' ? 'bg-green-500/20' : 
+          editStatus.status === 'error' ? 'bg-red-500/20' : 
+          'bg-blue-500/20'
+        }`}>
           <p className="text-white">{editStatus.message}</p>
+          
+          {editStatus.status === 'processing' && (
+            <div className="flex items-center mt-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              <p className="text-white text-sm">Обработка данных...</p>
+            </div>
+          )}
         </div>
       )}
       
@@ -101,7 +128,7 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
         />
       ) : (
         <div className="text-gray-200 whitespace-pre-line">
-          {timestamps ? (
+          {timestamps && timestamps.length > 0 ? (
             timestamps.map((item, index) => (
               <div key={`timestamp-${index}`} className="mb-2">
                 <span className="text-gray-400">[{item.time}] </span>

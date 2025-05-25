@@ -83,6 +83,10 @@ services.AddOpenApi();
 services.AddScoped<DbSeederService>();
 services.AddMinIO(minioSettings);
 services.AddElastic(elasticUri);
+//Добавляем новые сервисы для работы с аудио
+services.AddScoped<AudioRestoreService>();
+services.AddScoped<SpeechToTextService>();
+services.AddScoped<TextAnalysisService>();
 //репозитории
 services.AddScoped<AudioRecordRepository>();
 

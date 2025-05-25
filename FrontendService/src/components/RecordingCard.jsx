@@ -43,16 +43,18 @@ const RecordingCard = ({ recording, isPlaying, activeSong, data, i }) => {
             handlePlay={handlePlayClick}
           />
         </div>
-        <img 
-          alt="recording_img" 
-          src={recording.coverImage || 'https://via.placeholder.com/400?text=Военная+запись'} 
-          className="w-full h-full rounded-lg" 
-        />
+        <Link to={`/recordings/${recording.id}`}>
+          <img 
+            alt="recording_img" 
+            src={recording.coverImage || 'https://via.placeholder.com/400?text=Военная+запись'} 
+            className="w-full h-full rounded-lg" 
+          />
+        </Link>
       </div>
 
       <div className="mt-4 flex flex-col">
         <p className="font-semibold text-lg text-white truncate">
-          <Link to={`/track/${recording.id}`}>
+          <Link to={`/recordings/${recording.id}`}>
             {recording.title || 'Без названия'}
           </Link>
         </p>

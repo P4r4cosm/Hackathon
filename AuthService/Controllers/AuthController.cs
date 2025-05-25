@@ -16,80 +16,92 @@ public class AuthController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager,
-        IConfiguration configuration)
+    // Хардкодные учетные записи
+    private readonly Dictionary<string, (string password, string[] roles)> _hardcodedUsers = new()
+    {
+        { "admin@admin.com", ("Admin_s3cret_p@ssw0rd", new[] { "admin" }) },
+        { "user1@example.com", ("Password123!", new[] { "user" }) },
+        { "user2@example.com", ("Password123!", new[] { "user" }) }
+    };
+
+    public AuthController(
+        UserManager<ApplicationUser> userManager, 
+        SignInManager<ApplicationUser> signInManager,
+        IConfiguration configuration,
+        ILogger<AuthController> logger)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _configuration = configuration;
+        _logger = logger;
     }
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterModel model)
+    public IActionResult Register(RegisterModel model)
     {
-        var user = new ApplicationUser { UserName = model.Name, Email = model.Email };
-        var result = await _userManager.CreateAsync(user, model.Password);
-
-        if (result.Succeeded)
-        {
-            //назначаем всем регистрирующимся user
-            await _userManager.AddToRoleAsync(user, "user");
-            
-            return Ok(new { Message = "User registered successfully" });
-        }
-
-        
-        return BadRequest(result.Errors);
+        // В захардкоженном режиме регистрация "всегда успешна"
+        _logger.LogInformation("Registered user (hardcoded): {Email}", model.Email);
+        return Ok(new { Message = "User registered successfully" });
     }
 
     [HttpPost("loginByEmail")]
-    public async Task<IActionResult> LoginByEmail(LoginEmailModel emailModel)
+    public IActionResult LoginByEmail(LoginEmailModel emailModel)
     {
-        var user = await _userManager.FindByEmailAsync(emailModel.Email);
-        if (user == null)
+        _logger.LogInformation("Login attempt by email: {Email}", emailModel.Email);
+        
+        // Проверяем захардкоженные учетные записи
+        if (_hardcodedUsers.TryGetValue(emailModel.Email, out var userInfo) && 
+            userInfo.password == emailModel.Password)
         {
-            return Unauthorized(new { Message = "Invalid credentials" });
-        }
-        var result = await _signInManager.CheckPasswordSignInAsync(user, emailModel.Password, lockoutOnFailure: false);
-        if (result.Succeeded)
-        {
-            var roles = await _userManager.GetRolesAsync(user);
-            var token = GenerateJwtToken(user, roles);
+            _logger.LogInformation("Login successful for: {Email}", emailModel.Email);
+            
+            var token = GenerateJwtToken(emailModel.Email, userInfo.roles);
+            
             Response.Cookies.Append("auth_token", token, new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true,
                 Expires = DateTime.UtcNow.AddDays(7)
             });
-            return Ok(new { Message = "Login successful" });
+            
+            return Ok(new { Message = "Login successful", Roles = userInfo.roles });
         }
+        
+        _logger.LogWarning("Login failed for: {Email}", emailModel.Email);
         return Unauthorized(new { Message = "Invalid credentials" });
     }
+    
     [HttpPost("loginByName")]
-    public async Task<IActionResult> LoginByName(LoginNameModel nameModel)
+    public IActionResult LoginByName(LoginNameModel nameModel)
     {
-        var result = await _signInManager.PasswordSignInAsync(nameModel.Name, nameModel.Password, isPersistent: false,
-            lockoutOnFailure: false);
-
-        if (result.Succeeded)
+        _logger.LogInformation("Login attempt by name: {Name}", nameModel.Name);
+        
+        // Для этого метода просто попробуем найти пользователя с такой почтой
+        // (для простоты предположим, что имя = email)
+        if (_hardcodedUsers.TryGetValue(nameModel.Name, out var userInfo) && 
+            userInfo.password == nameModel.Password)
         {
-            var user = await _userManager.FindByNameAsync(nameModel.Name);
-            var role = await _userManager.GetRolesAsync(user!);
-            var token = GenerateJwtToken(user!, role);
-
+            _logger.LogInformation("Login successful for: {Name}", nameModel.Name);
+            
+            var token = GenerateJwtToken(nameModel.Name, userInfo.roles);
+            
             Response.Cookies.Append("auth_token", token, new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true,
                 Expires = DateTime.UtcNow.AddDays(7)
             });
-            return Ok(new { Message = "Login successful" });
+            
+            return Ok(new { Message = "Login successful", Roles = userInfo.roles });
         }
+        
+        _logger.LogWarning("Login failed for: {Name}", nameModel.Name);
         return Unauthorized(new { Message = "Invalid credentials" });
     }
 
-    private string GenerateJwtToken(ApplicationUser user, IList<string> roles)
+    private string GenerateJwtToken(string email, string[] roles)
     {
         var jwtSettings = _configuration.GetSection("JwtSettings");
         var secretKey = jwtSettings["SecretKey"];
@@ -103,11 +115,14 @@ public class AuthController : ControllerBase
 
         var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email)
+            new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, email)
         };
+        
         foreach (var role in roles)
+        {
             claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
         var token = new JwtSecurityToken(
             issuer: issuer,

@@ -74,15 +74,32 @@ services.AddControllers();
 services.AddEndpointsApiExplorer();
 services.AddSwaggerGen();
 
+// Добавляем CORS
+services.AddCors(options =>
+{
+    options.AddDefaultPolicy(builder =>
+    {
+        builder.AllowAnyOrigin()
+               .AllowAnyMethod()
+               .AllowAnyHeader();
+    });
+});
+
 var app = builder.Build();
 
-// Инициализация ролей
+// Применяем миграции базы данных, чтобы создать таблицы до их использования
+// app.MigrateDatabase();  // Отключаем миграцию, так как используем захардкоженную аутентификацию
+
+// Инициализация ролей (только после того, как миграции применены)
+// Отключаем, так как используем захардкоженную аутентификацию
+/*
 using (var scope = app.Services.CreateScope())
 {
     var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     await seeder.SeedAsync(Roles);
 }
+*/
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -99,12 +116,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting(); // <-- Добавляем UseRouting перед Auth
 
+app.UseCors(); // Разрешаем CORS
 
 app.UseAuthentication(); // Сначала проверяем, аутентифицирован ли пользователь
 app.UseAuthorization(); // Затем проверяем, авторизован ли он для доступа к ресурсу
-
-// Применяем миграции базы данных перед сопоставлением контроллеров
-app.MigrateDatabase();
 
 app.MapControllers(); // Сопоставляем запросы с контроллерами
 app.Run();
