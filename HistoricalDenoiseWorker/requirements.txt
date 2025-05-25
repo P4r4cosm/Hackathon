@@ -1,0 +1,6 @@
+pika>=1.3.0,<2.0.0
+minio>=7.1.0,<8.0.0
+ 
+# Остальные зависимости (tensorflow, hydra-core, soundfile и т.д.)
+# предполагаются установленными в базовом Docker-образе 'historical-denoiser:latest'
+# через его environment.yml. 
