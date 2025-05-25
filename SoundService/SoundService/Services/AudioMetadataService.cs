@@ -51,16 +51,45 @@ public class AudioMetadataService
         }
 
         // Поиск или создание жанра
-        var genreName = file.Tag.FirstGenre ?? "Unknown Genre";
-        var genre = await _context.Genres
-                        .FirstOrDefaultAsync(g => g.Name == genreName)
-                    ?? new Genre { Name = genreName };
+        var rawGenres = file.Tag.Genres ?? new string[] { "Unknown Genre" };
 
-        if (genre.Id == 0)
+        var genreNames = new List<string>();
+
+        foreach (var genre in rawGenres)
         {
-            _context.Genres.Add(genre);
-            await _context.SaveChangesAsync();
+            // Разделяем жанры по запятой и убираем лишние пробелы
+            var splitGenres = genre.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(g => g.Trim())
+                .Where(g => !string.IsNullOrWhiteSpace(g));
+
+            genreNames.AddRange(splitGenres);
         }
+
+        // Убираем дубликаты 
+        genreNames = genreNames.Distinct().ToList();
+        var audioGenres = new List<AudioGenre>();
+
+        foreach (var genreName in genreNames)
+        {
+            // Поиск существующего жанра или создание нового
+            var genre = await _context.Genres
+                            .FirstOrDefaultAsync(g => g.Name == genreName) 
+                        ?? new Genre { Name = genreName };
+
+            if (genre.Id == 0)
+            {
+                _context.Genres.Add(genre);
+                await _context.SaveChangesAsync(); // Сохраняем сразу, чтобы получить Id
+            }
+
+            // Создаем связь AudioGenre
+            audioGenres.Add(new AudioGenre
+            {
+                GenreId = genre.Id,
+                Genre = genre
+            });
+        }
+        
         var audioRecord = new AudioRecord
         {
             Title = file.Tag.Title ?? Path.GetFileNameWithoutExtension(fileName),
@@ -69,7 +98,7 @@ public class AudioMetadataService
             Year = (int)file.Tag.Year,
             Author = author,
             Album = album,
-            Genre = genre,
+            AudioGenres = audioGenres,
             Duration = file.Properties.Duration,
             AudioKeywords = new List<AudioKeyword>(), 
             AudioThematicTags = new List<AudioThematicTag>()

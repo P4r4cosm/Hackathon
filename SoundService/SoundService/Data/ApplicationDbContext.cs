@@ -14,6 +14,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Author> Authors { get; set; }
     public DbSet<Album> Albums { get; set; }
     public DbSet<Genre> Genres { get; set; }
+    public DbSet<AudioGenre> AudioGenres { get; set; }
     public DbSet<AudioKeyword> Keywords { get; set; }
     public DbSet<AudioKeyword> AudioKeywords { get; set; }
     public DbSet<AudioThematicTag> ThematicTags { get; set; }
@@ -31,5 +32,9 @@ public class ApplicationDbContext : DbContext
 
          modelBuilder.Entity<AudioThematicTag>()
             .HasKey(at => new { at.AudioRecordId, at.ThematicTagId });
+         
+         modelBuilder.Entity<AudioGenre>()
+             .HasKey(ag => new { ag.AudioRecordId, ag.GenreId });
+             
     }
 }

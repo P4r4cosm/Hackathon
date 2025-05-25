@@ -16,7 +16,7 @@ public class RabbitMqController: ControllerBase
     }
     
     
-    [HttpGet("test")]
+    [HttpPost("demucs_task")]
     public async Task<IActionResult> Test()
     {
         var demucsTaskData = new DemucsTaskData
