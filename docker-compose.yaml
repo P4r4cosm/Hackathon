@@ -170,12 +170,32 @@ services:
       - discovery.type=single-node
       - xpack.security.enrollment.enabled=false
       - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g #ограничение по ОЗУ в 1гб
     ports:
       - "9200:9200"
       - "9300:9300"
     volumes:
-      - ./data/elasticsearch:/usr/share/elasticsearch/data
-      - ./logs/elasticsearch:/usr/share/elasticsearch/logs
+      - es_data:/usr/share/elasticsearch/data   # Именованный том для данных
+      - es_logs:/usr/share/elasticsearch/logs   # Именованный том для логов
+    healthcheck: # Важно для depends_on
+      test: ["CMD-SHELL", "curl -s -f http://elasticsearch:9200"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+
+  elasticsearch-setup:
+    image: alpine/curl # Легковесный образ с curl
+    container_name: elasticsearch_setup
+    depends_on:
+      - elasticsearch
+    volumes:
+      - ./setup-elasticsearch.sh:/setup-elasticsearch.sh # Монтируем наш скрипт
+      - ./audio_records_mapping.json:/usr/share/elasticsearch/config/audio_records_mapping.json # Монтируем файл маппинга
+      # Если используете шаблон, также смонтируйте его:
+      # - ./audio_records_template.json:/usr/share/elasticsearch/config/audio_records_template.json
+    command: ["sh", "/setup-elasticsearch.sh"] # Команда для запуска скрипта
+    restart: on-failure # Можно перезапускать, если скрипт упадет, но обычно он должен выполниться один раз
 
   kibana:
     image: kibana:8.17.3
@@ -189,6 +209,8 @@ services:
       - node.name=kibana
       - cluster=es-docker-cluster
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+
+  
     
   minio:
     image: minio/minio
@@ -297,3 +319,5 @@ volumes:
   # shared_audio_data: {} # Временно не используется
   demucs_models_cache: {} # Том для кэширования моделей Demucs
   rabbitmq_data: {}
+  es_data:
+  es_logs:
