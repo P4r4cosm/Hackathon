@@ -64,6 +64,21 @@ namespace SoundService.Migrations
                     b.ToTable("Albums");
                 });
 
+            modelBuilder.Entity("SoundService.Models.AudioGenre", b =>
+                {
+                    b.Property<int>("AudioRecordId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GenreId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("AudioRecordId", "GenreId");
+
+                    b.HasIndex("GenreId");
+
+                    b.ToTable("AudioGenres");
+                });
+
             modelBuilder.Entity("SoundService.Models.AudioKeyword", b =>
                 {
                     b.Property<int>("AudioRecordId")
@@ -76,7 +91,7 @@ namespace SoundService.Migrations
 
                     b.HasIndex("KeywordId");
 
-                    b.ToTable("AudioKeyword");
+                    b.ToTable("AudioKeywords");
                 });
 
             modelBuilder.Entity("SoundService.Models.AudioRecord", b =>
@@ -103,14 +118,11 @@ namespace SoundService.Migrations
                     b.Property<long>("FileSizeBytes")
                         .HasColumnType("bigint");
 
-                    b.Property<int>("GenreId")
+                    b.Property<int?>("GenreId")
                         .HasColumnType("integer");
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("UploadUserId")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("UploadedAt")
@@ -142,7 +154,7 @@ namespace SoundService.Migrations
 
                     b.HasIndex("ThematicTagId");
 
-                    b.ToTable("AudioThematicTag");
+                    b.ToTable("AudioThematicTags");
                 });
 
             modelBuilder.Entity("SoundService.Models.Genre", b =>
@@ -176,7 +188,7 @@ namespace SoundService.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Keyword");
+                    b.ToTable("Keywords");
                 });
 
             modelBuilder.Entity("SoundService.Models.ModerationStatus", b =>
@@ -224,7 +236,7 @@ namespace SoundService.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ThematicTag");
+                    b.ToTable("ThematicTags");
                 });
 
             modelBuilder.Entity("SoundService.Models.Album", b =>
@@ -236,6 +248,25 @@ namespace SoundService.Migrations
                         .IsRequired();
 
                     b.Navigation("Author");
+                });
+
+            modelBuilder.Entity("SoundService.Models.AudioGenre", b =>
+                {
+                    b.HasOne("SoundService.Models.AudioRecord", "AudioRecord")
+                        .WithMany("AudioGenres")
+                        .HasForeignKey("AudioRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SoundService.Models.Genre", "Genre")
+                        .WithMany()
+                        .HasForeignKey("GenreId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AudioRecord");
+
+                    b.Navigation("Genre");
                 });
 
             modelBuilder.Entity("SoundService.Models.AudioKeyword", b =>
@@ -269,17 +300,13 @@ namespace SoundService.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("SoundService.Models.Genre", "Genre")
+                    b.HasOne("SoundService.Models.Genre", null)
                         .WithMany("Songs")
-                        .HasForeignKey("GenreId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("GenreId");
 
                     b.Navigation("Album");
 
                     b.Navigation("Author");
-
-                    b.Navigation("Genre");
                 });
 
             modelBuilder.Entity("SoundService.Models.AudioThematicTag", b =>
@@ -324,6 +351,8 @@ namespace SoundService.Migrations
 
             modelBuilder.Entity("SoundService.Models.AudioRecord", b =>
                 {
+                    b.Navigation("AudioGenres");
+
                     b.Navigation("AudioKeywords");
 
                     b.Navigation("AudioThematicTags");

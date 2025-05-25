@@ -1,5 +1,6 @@
 ﻿using System.Reflection.PortableExecutable;
 using Microsoft.AspNetCore.Mvc;
+using SoundService.Infrastucture;
 using SoundService.Models;
 using SoundService.Repositories;
 using SoundService.Services;
@@ -37,89 +38,60 @@ public class AudioController : ControllerBase
     }
 
     [HttpPost("upload")]
-    public async Task<IActionResult> UploadAudio(IFormFile file, string folderToUpload = "uploads")
+    public async Task<IActionResult> UploadAudio(UploadAudioDto data)
     {
+        var file = data.File;
         if (file == null || file.Length == 0)
             return BadRequest("Файл не загружен.");
-
-        _logger.LogInformation("Начало загрузки файла: {FileName}, размер: {Size} байт, папка: {Folder}",
-            file.FileName, file.Length, folderToUpload);
-
-        // Получаем расширение файла
+    
+        // Получаем расширение файла  
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         // Сохраняем файл во временный каталог или обрабатываем напрямую
         var tempFilePath = Path.Combine(Path.GetTempPath(), Path.ChangeExtension(Path.GetRandomFileName(), ext));
-
+    
         using (var stream = new FileStream(tempFilePath, FileMode.Create))
         {
             await file.CopyToAsync(stream);
         }
-
-        var filePathInMinio = folderToUpload + "/" + file.FileName;
-        _logger.LogInformation("Файл сохранен во временную директорию: {TempPath}, будет загружен в MinIO: {MinioPath}",
-            tempFilePath, filePathInMinio);
-
+    
+        var filePathInMinio = data.FolderToUpload + "/" + file.FileName;
+    
+        await _minIOService.UploadTrackAsync(tempFilePath, filePathInMinio, file.ContentType);
+    
         try
         {
-            // Загружаем оригинальный файл в MinIO
-            await _minIOService.UploadTrackAsync(tempFilePath, filePathInMinio, file.ContentType);
-            _logger.LogInformation("Файл успешно загружен в MinIO");
-
-            // Получаем метаданные из файла
-            var metadata = await _audioMetadataService.CreateAudioRecordFromMetadata(tempFilePath, file.FileName, filePathInMinio);
-            _logger.LogInformation("Metadata: {Metadata}", metadata);
-
-            // Восстанавливаем качество звука
-            _logger.LogInformation("Начало процесса улучшения звука");
-            var restoredPathInMinio = await _audioRestoreService.RestoreAudioQualityAsync(tempFilePath, filePathInMinio);
-            metadata.RestoredFilePath = restoredPathInMinio;
-            _logger.LogInformation("Звук улучшен, путь: {RestoredPath}", restoredPathInMinio);
-
-            // Распознаем текст из аудио
-            _logger.LogInformation("Начало распознавания текста");
-            var (fullText, segments) = await _speechToTextService.RecognizeTextAsync(tempFilePath, metadata.Title);
-            _logger.LogInformation("Текст распознан: {TextLength} символов, {SegmentsCount} сегментов", 
-                fullText?.Length ?? 0, segments?.Count ?? 0);
-
-            // Анализируем текст для получения тегов и ключевых слов
-            _logger.LogInformation("Начало анализа текста");
-            var (tags, keywords) = await _textAnalysisService.AnalyzeTextAsync(fullText, metadata.Title);
-            _logger.LogInformation("Текст проанализирован: {TagsCount} тегов, {KeywordsCount} ключевых слов", 
-                tags?.Count ?? 0, keywords?.Count ?? 0);
-
-            // Добавляем теги и ключевые слова к метаданным
-            if (tags != null && tags.Count > 0)
+            //достаём метаданные
+            var audioRecord =
+                await _audioMetadataService.CreateAudioRecordFromMetadata(tempFilePath, file.FileName, filePathInMinio, data);
+            
+            // Обновляем метаданные если они указаны в запросе
+            if (!string.IsNullOrEmpty(data.Title))
+                audioRecord.Title = data.Title;
+            if (!string.IsNullOrEmpty(data.AlbumName))
+                audioRecord.Album.Title = data.AlbumName; 
+            if (!string.IsNullOrEmpty(data.ArtistName))
+                audioRecord.Author.Name = data.ArtistName;
+            if (data.Year.HasValue)
+                audioRecord.Year = data.Year.Value;
+            
+            _logger.LogInformation("Metadata: {Metadata}", audioRecord);
+            //сохраняем трек в postgres и в elastic
+            _logger.LogInformation("Saving record to postgres...");
+            await _audioRecordRepository.SaveAsync(audioRecord);
+            var audioRecordElastic = AudioRecordConverter.ToAudioRecordForElastic(audioRecord);
+    
+            audioRecordElastic.FullText = "Не обработан";
+            audioRecordElastic.TranscriptSegments = new List<TranscriptSegment>()
             {
-                metadata.AudioThematicTags = tags.Select(t => new AudioThematicTag 
-                { 
-                    ThematicTag = t,
-                    ThematicTagId = t.Id
-                }).ToList();
-            }
-
-            if (keywords != null && keywords.Count > 0)
-            {
-                metadata.AudioKeywords = keywords.Select(k => new AudioKeyword 
-                { 
-                    Keyword = k,
-                    KeywordId = k.Id
-                }).ToList();
-            }
-
-            // Сохраняем метаданные в PostgreSQL
-            _logger.LogInformation("Сохранение записи в PostgreSQL");
-            await _audioRecordRepository.SaveAsync(metadata);
-
-            // Сохраняем текст и сегменты в Elasticsearch
-            var audioRecordElastic = new AudioRecordForElastic
-            {
-                Id = metadata.Id,
-                Title = metadata.Title,
-                FullText = fullText,
-                TranscriptSegments = segments
+                new TranscriptSegment()
+                {
+                    Start = 0,
+                    End = 0,
+                    Text = "Не обработан"
+                }
             };
-
-            _logger.LogInformation("Сохранение текста в Elasticsearch");
+    
+            _logger.LogInformation("Saving record to elastic...");
             await _audioRecordRepository.SaveAsync(audioRecordElastic);
 
             // Удаляем временный файл
@@ -135,13 +107,8 @@ public class AudioController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Ошибка при обработке файла: {Message}", ex.Message);
-            try
-            {
-                System.IO.File.Delete(tempFilePath);
-            }
-            catch {}
-            return StatusCode(500, $"Ошибка обработки файла: {ex.Message}");
+            System.IO.File.Delete(tempFilePath);
+            return StatusCode(500, $"Ошибка сохранения файла: {ex.Message}");
         }
     }
 
@@ -187,23 +154,65 @@ public class AudioController : ControllerBase
     }
 
     [HttpGet("tracks")]
-    public async Task<IActionResult> GetAllTracks()
+    public async Task<IActionResult> GetAllTracks(int from, int count)
     {
-        var audioList = await _audioRecordRepository.GetAllAsync();
+        //var audioList = await _audioRecordRepository.GetAllAsync();
+        var audioList = await _audioRecordRepository.GetAllAsync(from, count);
         return Ok(audioList);
     }
 
-    [HttpGet("track/{id}")]
-    public async Task<IActionResult> GetTrackById(int id)
+    [HttpGet("authors")]
+    public async Task<IActionResult> GetAllAuthors()
     {
-        var audio = await _audioRecordRepository.GetTrackByIdAsync(id);
-        return Ok(audio);
+        return Ok(await _audioRecordRepository.GetAllAuthorsAsync());
     }
 
-    [HttpGet("track_text/{id}")]
-    public async Task<IActionResult> GetTrackTextById(int id)
+    [HttpGet("genres")]
+    public async Task<IActionResult> GetAllGenres()
     {
-        var audioElastic = await _audioRecordRepository.GetTrackTextByIdAsync(id);
-        return Ok(audioElastic);
+        return Ok(await _audioRecordRepository.GetAllGenresAsync());
+    }
+
+    [HttpGet("tags")]
+    public async Task<IActionResult> GetAllTags()
+    {
+        return Ok(await _audioRecordRepository.GetAllThematicTagsAsync());
+    }
+
+    [HttpGet("keywords")]
+    public async Task<IActionResult> GetAllKeywords()
+    {
+        return Ok(await _audioRecordRepository.GetAllKeywordsAsync());
+    }
+
+    [HttpGet("author_tracks")]
+    public async Task<IActionResult> GetAllAuthorsTracks(int id, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByAuthor(id, from, count));
+    }
+    
+    [HttpGet("year_tracks")]
+    
+    public async Task<IActionResult> GetAllYearTracks(int year, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByYear(year, from, count));
+    }
+    
+    [HttpGet("genres_tracks")]
+    public async Task<IActionResult> GetAllGenresTracks(int id, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByGenre(id, from, count));
+    }
+    
+    [HttpGet("tag_tracks")]
+    
+    public async Task<IActionResult> GetAllTagTracks(int id, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByAuthor(id, from, count));
+    }
+    [HttpGet("keyword_tracks")]
+    public async Task<IActionResult> GetAllKeywordTracks(int id, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByAuthor(id, from, count));
     }
 }

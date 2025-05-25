@@ -40,6 +40,10 @@ services:
       - JwtSettings__Issuer=${JwtSettings__Issuer}
       - JwtSettings__Audience=${JwtSettings__Audience}
       - JwtSettings__DurationInHours=${JwtSettings__DurationInHours}
+      - JwtSettings__AccessTokenDurationInMinutes=${JwtSettings__AccessTokenDurationInMinutes}
+      - JwtSettings__RefreshTokenDurationInDays=${JwtSettings__RefreshTokenDurationInDays}
+      - AUTHENTICATION__GOOGLE__CLIENTID=${AUTHENTICATION__GOOGLE__CLIENTID}
+      - AUTHENTICATION__GOOGLE__CLIENTSECRET=${AUTHENTICATION__GOOGLE__CLIENTSECRET}
       # Настройки для HTTPS
       - ASPNETCORE_URLS=http://+:80;https://+:443
       - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD}
@@ -110,9 +114,26 @@ services:
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
       - ELASTIC_URI=${ELASTIC_URI}
+
+
+       # --- ПЕРЕМЕННЫЕ ДЛЯ RABBITMQ ---
+      - RABBITMQ_HOSTNAME=rabbitmq # Имя сервиса RabbitMQ
+      - RABBITMQ_PORT=${RABBITMQ_PORT}
+      - RABBITMQ_USERNAME=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASS}
+
+      - RABBITMQ_DEMUCS_QUEUE_NAME=${RABBITMQ_DEMUCS_QUEUE_NAME}
+      - RABBITMQ_DEMUCS_TASKS_ROUTING_KEY=${RABBITMQ_DEMUCS_TASKS_ROUTING_KEY}
+      - RABBITMQ_AUDIO_PROCESSING_EXCHANGE=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE}
+      - RABBITMQ_RESULTS_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME}
+      - RABBITMQ_TASK_RESULTS_QUEUE_NAME=${RABBITMQ_TASK_RESULTS_QUEUE_NAME}
+      - RABBITMQ_TASK_RESULTS_ROUTING_KEY=$"{RABBITMQ_TASK_RESULTS_ROUTING_KEY}"
+
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
+      - rabbitmq 
+      - minio    
+      - elasticsearch
   frontend:
     build:
       context: . # Контекст сборки - корень проекта
@@ -150,12 +171,32 @@ services:
       - discovery.type=single-node
       - xpack.security.enrollment.enabled=false
       - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g #ограничение по ОЗУ в 1гб
     ports:
       - "9200:9200"
       - "9300:9300"
     volumes:
-      - ./data/elasticsearch:/usr/share/elasticsearch/data
-      - ./logs/elasticsearch:/usr/share/elasticsearch/logs
+      - es_data:/usr/share/elasticsearch/data   # Именованный том для данных
+      - es_logs:/usr/share/elasticsearch/logs   # Именованный том для логов
+    healthcheck: # Важно для depends_on
+      test: ["CMD-SHELL", "curl -s -f http://elasticsearch:9200"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+
+  elasticsearch-setup:
+    image: alpine/curl # Легковесный образ с curl
+    container_name: elasticsearch_setup
+    depends_on:
+      - elasticsearch
+    volumes:
+      - ./setup-elasticsearch.sh:/setup-elasticsearch.sh # Монтируем наш скрипт
+      - ./audio_records_mapping.json:/usr/share/elasticsearch/config/audio_records_mapping.json # Монтируем файл маппинга
+      # Если используете шаблон, также смонтируйте его:
+      # - ./audio_records_template.json:/usr/share/elasticsearch/config/audio_records_template.json
+    command: ["sh", "/setup-elasticsearch.sh"] # Команда для запуска скрипта
+    restart: on-failure # Можно перезапускать, если скрипт упадет, но обычно он должен выполниться один раз
 
   kibana:
     image: kibana:8.17.3
@@ -169,6 +210,8 @@ services:
       - node.name=kibana
       - cluster=es-docker-cluster
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+
+  
     
   minio:
     image: minio/minio
@@ -186,46 +229,96 @@ services:
     container_name: mc-init
     depends_on:
       - minio
+    environment:
+      # Передаем ВСЕ необходимые переменные из .env
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
     volumes:
       # Эта строка отвечает за то, чтобы содержимое вашей папки
       # ./music_test/original_tracks на хосте было доступно
       # внутри контейнера mc-init по пути /init-audio
       - ./music_test/:/init-audio
-    entrypoint: |
-      /bin/sh -c "
-        echo 'Ожидание MinIO...'
-        sleep 8 # Можно немного увеличить sleep для надежности, если MinIO стартует медленно
+      - ./init-mc.sh:/usr/local/bin/init-mc.sh # Монтируем скрипт
+    entrypoint: ["/usr/local/bin/init-mc.sh"]   # <--- ИЗМЕНЕНИЕ ЗДЕСЬ
 
-        echo 'Настройка mc клиента...'
-        mkdir -p /root/.mc
-        # Убедитесь, что accessKey и secretKey здесь совпадают с MINIO_ROOT_USER/PASSWORD
-        # или используйте переменные окружения для mc alias set, как предлагалось ранее
-        echo '{\"version\": \"9\", \"hosts\": {\"local\": {
-          \"url\": \"http://minio:9000\",
-          \"accessKey\": \"minioadmin\",
-          \"secretKey\": \"minioadmin\",
-          \"api\": \"S3v4\"
-        }}}' > /root/.mc/config.json
+  demucs_service: # Этот сервис теперь в основном для сборки образа
+    build:
+      context: ./demucs
+      dockerfile: Dockerfile
+    image: local/demucs_app # Присваиваем имя собираемому образу
+    container_name: demucs_build_helper # Имя контейнера не так важно, т.к. он не будет постоянно работать
+    volumes:
+      # Эти тома здесь для того, чтобы docker-compose их "знал",
+      # но фактическое использование будет при docker run из FlaskServise.
+      # Монтирование в этом сервисе не имеет смысла, так как он не будет запущен.
+      # Однако, demucs_models_cache может быть полезен, если demucs/Dockerfile
+      # скачивает модели при сборке и кладет их в /data/models.
+      - demucs_models_cache:/data/models
 
-        echo 'Создание бакета local/audio-bucket (если не существует)...'
-        mc mb --ignore-existing local/audio-bucket
 
-        echo '🔄 Зеркалирую все содержимое /init-audio/ в local/audio-bucket/ сохраняя структуру...'
-        # Ключевая команда: mc mirror
-        # --overwrite перезапишет существующие файлы в бакете, если они есть и в источнике
-        # Если нужно, чтобы удалялись файлы в бакете, которых нет в источнике, добавьте --remove
-        mc mirror --overwrite /init-audio/ local/audio-bucket/
-
-        # Проверка: вывести список файлов в бакете для отладки
-        echo 'Содержимое бакета local/audio-bucket/ после зеркалирования:'
-        mc ls --recursive local/audio-bucket/
-
-        if [ $? -eq 0 ]; then
-          echo '✅ Процесс зеркалирования успешно завершен.'
-        else
-          echo '❌ Ошибка во время выполнения mc mirror или mc ls.'
-        fi
-      "
+  demucs_worker: # Новый Python воркер
+    build:
+      context: ./DemucsWorker # Предполагается, что Dockerfile и скрипт в этой папке
+      dockerfile: Dockerfile # Имя Dockerfile (из предыдущего ответа)
+    container_name: demucs_worker_1
+    restart: unless-stopped
+    env_file:
+      - .env # Все переменные для RabbitMQ, MinIO и Demucs должны быть здесь
+    environment:
+      # Переопределение или добавление специфичных переменных, если нужно
+      - LOG_LEVEL=INFO # Уровень логирования для воркера
+      # Убедитесь, что эти переменные ниже настроены в .env и совпадают с SoundService
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_DEMUCS_QUEUE_NAME}
+      - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE}
+      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_DEMUCS_TASKS_ROUTING_KEY}
+      - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME}
+      - RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=C5RDgrAREfHtx8lgpayc
+      - MINIO_SECRET_KEY=UYKwpYFjj9ahfea4vCa0ROGhfLiCSsII8LjXwYJc
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - DEMUCS_MODEL=htdemucs_ft # или любая другая модель
+    volumes:
+      - demucs_models_cache:/root/.cache/torch #
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started # Или service_completed_successfully для mc-init
+    # --- Для использования GPU (если Dockerfile собран с поддержкой CUDA) ---
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1 # или 'all'
+              capabilities: [gpu]
+  rabbitmq: # Имя сервиса, по которому другие контейнеры будут к нему обращаться
+    image: rabbitmq:3-management-alpine # Образ с UI для управления
+    container_name: rabbitmq_broker # Имя самого контейнера
+    ports:
+      - "5672:5672"  # Порт для AMQP (протокол RabbitMQ)
+      - "15672:15672" # Порт для веб-интерфейса (логин/пароль по умолчанию guest/guest)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq/ # Для сохранения данных RabbitMQ (очередей, сообщений)
+    environment:
+      # Для хакатона можно оставить guest/guest, но для продакшена лучше задать свои
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER} # Использует из .env или guest по умолчанию
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS} # Использует из .env или guest по умолчанию
+    restart: unless-stopped
+    healthcheck: # Опционально, но полезно
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
-  postgres_data:
+  # shared_audio_data: {} # Временно не используется
+  demucs_models_cache: {} # Том для кэширования моделей Demucs
+  rabbitmq_data: {}
+  es_data:
+  es_logs:

@@ -93,7 +93,7 @@ services.AddAuthentication(options =>
         {
             OnMessageReceived = context =>
             {
-                if (context.Request.Cookies.TryGetValue("auth_token", out var tokenFromCookie))
+                if (context.Request.Cookies.TryGetValue("access_token", out var tokenFromCookie))
                 {
                     context.Token = tokenFromCookie;
                 }
