@@ -322,3 +322,4 @@ volumes:
   rabbitmq_data: {}
   es_data:
   es_logs:
+  postgres_data: {} # Том для хранения данных PostgreSQL
