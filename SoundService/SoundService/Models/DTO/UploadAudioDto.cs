@@ -14,5 +14,6 @@ public class UploadAudioDto
     public string? Title { get; set; } // Пользователь может указать название, даже если в тегах другое
     public string? AlbumName { get; set; }
     public string? ArtistName { get; set; }
+    public string[]? GenreNames { get; set; }
     public int? Year { get; set; }
 }

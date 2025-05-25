@@ -31,32 +31,43 @@ public class AudioController : ControllerBase
         var file = data.File;
         if (file == null || file.Length == 0)
             return BadRequest("Файл не загружен.");
-
-        // Получаем расширение файла
+    
+        // Получаем расширение файла  
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         // Сохраняем файл во временный каталог или обрабатываем напрямую
         var tempFilePath = Path.Combine(Path.GetTempPath(), Path.ChangeExtension(Path.GetRandomFileName(), ext));
-
+    
         using (var stream = new FileStream(tempFilePath, FileMode.Create))
         {
             await file.CopyToAsync(stream);
         }
-
+    
         var filePathInMinio = data.FolderToUpload + "/" + file.FileName;
-
+    
         await _minIOService.UploadTrackAsync(tempFilePath, filePathInMinio, file.ContentType);
-
+    
         try
         {
             //достаём метаданные
             var audioRecord =
-                await _audioMetadataService.CreateAudioRecordFromMetadata(tempFilePath, file.FileName, filePathInMinio);
+                await _audioMetadataService.CreateAudioRecordFromMetadata(tempFilePath, file.FileName, filePathInMinio, data);
+            
+            // Обновляем метаданные если они указаны в запросе
+            if (!string.IsNullOrEmpty(data.Title))
+                audioRecord.Title = data.Title;
+            if (!string.IsNullOrEmpty(data.AlbumName))
+                audioRecord.Album.Title = data.AlbumName; 
+            if (!string.IsNullOrEmpty(data.ArtistName))
+                audioRecord.Author.Name = data.ArtistName;
+            if (data.Year.HasValue)
+                audioRecord.Year = data.Year.Value;
+            
             _logger.LogInformation("Metadata: {Metadata}", audioRecord);
             //сохраняем трек в postgres и в elastic
             _logger.LogInformation("Saving record to postgres...");
             await _audioRecordRepository.SaveAsync(audioRecord);
             var audioRecordElastic = AudioRecordConverter.ToAudioRecordForElastic(audioRecord);
-            
+    
             audioRecordElastic.FullText = "Не обработан";
             audioRecordElastic.TranscriptSegments = new List<TranscriptSegment>()
             {
@@ -67,7 +78,7 @@ public class AudioController : ControllerBase
                     Text = "Не обработан"
                 }
             };
-            
+    
             _logger.LogInformation("Saving record to elastic...");
             await _audioRecordRepository.SaveAsync(audioRecordElastic);
             //удаляем временный файл
@@ -153,5 +164,35 @@ public class AudioController : ControllerBase
     {
         return Ok(await _audioRecordRepository.GetAllKeywordsAsync());
     }
+
+    [HttpGet("author_tracks")]
+    public async Task<IActionResult> GetAllAuthorsTracks(int id, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByAuthor(id, from, count));
+    }
     
+    [HttpGet("year_tracks")]
+    
+    public async Task<IActionResult> GetAllYearTracks(int year, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByYear(year, from, count));
+    }
+    
+    [HttpGet("genres_tracks")]
+    public async Task<IActionResult> GetAllGenresTracks(int id, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByGenre(id, from, count));
+    }
+    
+    [HttpGet("tag_tracks")]
+    
+    public async Task<IActionResult> GetAllTagTracks(int id, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByAuthor(id, from, count));
+    }
+    [HttpGet("keyword_tracks")]
+    public async Task<IActionResult> GetAllKeywordTracks(int id, int from, int count)
+    {
+        return Ok(await _audioRecordRepository.GetTracksByAuthor(id, from, count));
+    }
 }

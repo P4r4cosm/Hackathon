@@ -5,8 +5,7 @@ namespace SoundService.Models;
 
 public class AudioRecordForElastic
 {
-    // Id из PostgreSQL, используется как _id в Elasticsearch для легкого обновления/удаления
-    //[JsonPropertyName("id")] // Явное указание имени поля в ES, если отличается от имени свойства
+    
     public int Id { get; set; }
     public string Title { get; set; }                // Название песни
     public ICollection<TranscriptSegment> TranscriptSegments { get; set; }
