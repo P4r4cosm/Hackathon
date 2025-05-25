@@ -48,7 +48,7 @@ const RecordingDetails = () => {
       // Комбинируем данные из обоих источников
       setRecording({
         ...recordingData,
-        transcription: recordingText?.fullText || recordingData.text || 'Текст отсутствует',
+        transcription: recordingText?.fullText || 'Текст отсутствует',
         timestamps: recordingText?.transcriptSegments?.map(segment => ({
           time: formatTimestamp(segment.start),
           text: segment.text
@@ -57,7 +57,7 @@ const RecordingDetails = () => {
     } else if (recordingData) {
       setRecording({
         ...recordingData,
-        transcription: recordingData.text || 'Текст отсутствует',
+        transcription: 'Текст отсутствует',
         timestamps: []
       });
     }
@@ -100,7 +100,7 @@ const RecordingDetails = () => {
       timestamps = recording.timestamps || [];
     } else {
       // Иначе используем данные из песни
-      transcription = song.text || song.transcription || '';
+      transcription = song.transcription || '';
       timestamps = song.timestamps || [];
     }
     
@@ -158,8 +158,8 @@ const RecordingDetails = () => {
       {/* Двойной плеер для аудио */}
       <div className="mb-10">
         <DualAudioPlayer 
-          originalUrl={recording.filePath || recording.originalAudioUrl} 
-          restoredUrl={recording.restoredFilePath || recording.restoredAudioUrl} 
+          originalUrl={recording.filePath} 
+          restoredUrl={recording.restoredFilePath} 
           title={recording.title}
           onTimeUpdate={handleTimeUpdate}
         />

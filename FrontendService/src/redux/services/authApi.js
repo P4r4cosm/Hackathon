@@ -3,94 +3,110 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 export const authApi = createApi({
   reducerPath: 'authApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://localhost:8000/api/',
-    credentials: 'include', // Обеспечивает отправку и получение cookies
+    baseUrl: 'http://localhost:8000/',
+    credentials: 'include',
+    prepareHeaders: (headers) => {
+      headers.set('Content-Type', 'application/json');
+      return headers;
+    },
   }),
   endpoints: (builder) => ({
-    // Логин пользователя по имени
-    login: builder.mutation({
-      query: (credentials) => ({
-        url: 'auth/loginByName',
-        method: 'POST',
-        body: {
-          name: credentials.username,
-          password: credentials.password
-        },
-      }),
-      // При успешном входе сохраним информацию о пользователе
-      async onQueryStarted(_, { queryFulfilled }) {
-        try {
-          const result = await queryFulfilled;
-          console.log('Успешный вход в систему:', result);
-          // Сохраняем статус авторизации в localStorage
-          localStorage.setItem('isAuthenticated', 'true');
-          localStorage.setItem('username', _.username);
-        } catch (error) {
-          console.error('Ошибка авторизации:', error);
-        }
-      }
-    }),
-    
-    // Вход по email
     loginByEmail: builder.mutation({
       query: (credentials) => ({
-        url: 'auth/loginByEmail',
+        url: '/loginByEmail',
         method: 'POST',
-        body: {
-          email: credentials.email,
-          password: credentials.password
-        },
+        body: credentials,
       }),
-      async onQueryStarted(_, { queryFulfilled }) {
-        try {
-          const result = await queryFulfilled;
-          console.log('Успешный вход в систему:', result);
+      transformResponse: (response) => {
+        if (response.token) {
+          localStorage.setItem('token', response.token);
           localStorage.setItem('isAuthenticated', 'true');
-          localStorage.setItem('email', _.email);
-        } catch (error) {
-          console.error('Ошибка авторизации:', error);
+          localStorage.setItem('user', JSON.stringify({
+            id: response.id,
+            email: response.email,
+            name: response.name,
+            roles: response.roles
+          }));
         }
-      }
+        return response;
+      },
     }),
     
-    // Регистрация пользователя
+    loginByName: builder.mutation({
+      query: (credentials) => ({
+        url: '/login_name',
+        method: 'POST',
+        body: credentials,
+      }),
+      transformResponse: (response) => {
+        if (response.token) {
+          localStorage.setItem('token', response.token);
+          localStorage.setItem('isAuthenticated', 'true');
+          localStorage.setItem('user', JSON.stringify({
+            id: response.id,
+            email: response.email,
+            name: response.name,
+            roles: response.roles
+          }));
+        }
+        return response;
+      },
+    }),
+    
     register: builder.mutation({
       query: (userData) => ({
-        url: 'auth/register',
+        url: '/register',
         method: 'POST',
-        body: {
-          name: userData.username,
-          email: userData.email,
-          password: userData.password
-        },
+        body: userData,
       }),
     }),
     
-    // Выход пользователя
-    logout: builder.mutation({
+    refresh: builder.mutation({
       query: () => ({
-        url: 'auth/logout',
+        url: '/refresh',
         method: 'POST',
       }),
-      // Обработчик успешного выхода
-      async onQueryStarted(_, { queryFulfilled }) {
+      transformResponse: (response) => {
+        if (response.token) {
+          localStorage.setItem('token', response.token);
+        }
+        return response;
+      },
+    }),
+    
+    googleLogin: builder.query({
+      query: () => ({
+        url: '/google-login',
+        method: 'GET',
+        responseHandler: 'text', // Получаем ответ как текст для перенаправления
+      }),
+    }),
+
+    logout: builder.mutation({
+      query: () => ({
+        url: '/logout',
+        method: 'POST',
+      }),
+      onQueryStarted: async (_, { queryFulfilled }) => {
         try {
           await queryFulfilled;
-          // Удаляем данные авторизации
+          // Очищаем данные аутентификации при выходе
+          localStorage.removeItem('token');
           localStorage.removeItem('isAuthenticated');
-          localStorage.removeItem('username');
-          localStorage.removeItem('email');
-        } catch (error) {
-          console.error('Ошибка при выходе:', error);
+          localStorage.removeItem('user');
+        } catch (err) {
+          console.error('Ошибка при выходе:', err);
         }
-      }
+      },
     }),
   }),
 });
 
 export const {
-  useLoginMutation,
   useLoginByEmailMutation,
+  useLoginByNameMutation,
   useRegisterMutation,
+  useRefreshMutation,
+  useGoogleLoginQuery,
   useLogoutMutation,
 } = authApi; 

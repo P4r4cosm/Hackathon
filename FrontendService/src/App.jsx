@@ -19,20 +19,15 @@ import { UploadForm } from './components/Admin';
 
 // Компонент для защиты маршрутов, требующих админских прав
 const AdminRoute = ({ children }) => {
-  // Для демонстрационных целей разрешаем доступ всем
-  return children;
-  
-  // В реальном приложении проверяем роль из redux или localStorage
-  // В этой имитации просто проверяем email пользователя
-  /*
-  const isAdmin = localStorage.getItem('email') === 'admin@admin.com';
+  // Проверяем роли пользователя из localStorage
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = user?.roles?.includes('Admin');
   
   if (!isAdmin) {
     return <Navigate to="/" replace />;
   }
   
   return children;
-  */
 };
 
 const App = () => {
@@ -69,7 +64,7 @@ const App = () => {
               <Route path="/top-charts" element={<TopCharts />} />
               <Route path="/around-you" element={<RecordingsByYear />} />
               
-              {/* Обновленные маршруты для использования с нашим API */}
+              {/* Маршруты для работы с API */}
               <Route path="/songs/:songid" element={<RecordingDetails />} />
               <Route path="/artists/:id" element={<AuthorDetails />} />
               <Route path="/search/:searchTerm" element={<Search />} />
@@ -79,7 +74,7 @@ const App = () => {
               <Route path="/recordings/:recordingId" element={<RecordingDetails />} />
               <Route path="/analytics" element={<Analytics />} />
               
-              {/* Для демонстрационных целей убрали защиту маршрута */}
+              {/* Маршрут для загрузки, защищенный проверкой на админа */}
               <Route path="/upload" element={
                 <AdminRoute>
                   <UploadForm />

@@ -101,8 +101,8 @@ public class AudioController : ControllerBase
                 success = true, 
                 message = "Запись успешно обработана и сохранена", 
                 filePath = filePathInMinio, 
-                restoredPath = restoredPathInMinio,
-                id = metadata.Id 
+                restoredPath = filePathInMinio,
+                id = audioRecord.Id 
             });
         }
         catch (Exception ex)

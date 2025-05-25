@@ -9,12 +9,12 @@ const DualAudioPlayer = ({
   onTimeUpdate,
   syncPlayers = true
 }) => {
-  // Преобразование URL для прохождения через SoundService API
+  // Преобразование URL для прохождения через API Gateway
   const getProperAudioUrl = (url) => {
     if (!url) return '';
     return url.startsWith('http') 
       ? url 
-      : `http://localhost:8000/api/audio/download?path=${encodeURIComponent(url)}`;
+      : `http://localhost:8000/download?path=${encodeURIComponent(url)}`;
   };
 
   const processedOriginalUrl = getProperAudioUrl(originalUrl);

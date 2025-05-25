@@ -68,7 +68,7 @@ public class AuthController : ControllerBase
     }
     
     [HttpPost("register")]
-    public IActionResult Register(RegisterModel model)
+    public async Task<IActionResult> Register(RegisterModel model)
     {
         var user = new ApplicationUser { UserName = model.Name, Email = model.Email };
         var result = await _userManager.CreateAsync(user, model.Password);
@@ -87,13 +87,13 @@ public class AuthController : ControllerBase
 
     // --- Обновленные методы логина ---
     [HttpPost("loginByEmail")]
-    public IActionResult LoginByEmail(LoginEmailModel emailModel)
+    public async Task<IActionResult> LoginByEmail(LoginEmailModel emailModel)
     {
         _logger.LogInformation("Login attempt by email: {Email}", emailModel.Email);
         
-        // Проверяем захардкоженные учетные записи
-        if (_hardcodedUsers.TryGetValue(emailModel.Email, out var userInfo) && 
-            userInfo.password == emailModel.Password)
+        // Проверяем учетные данные пользователя
+        var user = await _userManager.FindByEmailAsync(emailModel.Email);
+        if (user == null)
         {
             return Unauthorized(new { Message = "Invalid credentials" });
         }
@@ -131,7 +131,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("loginByName")]
-    public IActionResult LoginByName(LoginNameModel nameModel)
+    public async Task<IActionResult> LoginByName(LoginNameModel nameModel)
     {
         var user = await _userManager.FindByNameAsync(nameModel.Name);
         if (user == null)
@@ -480,7 +480,7 @@ public class AuthController : ControllerBase
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, email)
+            new Claim(JwtRegisteredClaimNames.Email, user.Email)
         };
         
         foreach (var role in roles)
