@@ -87,6 +87,8 @@ services.AddMinIO(minioSettings);
 services.AddElastic(elasticUri);
 //репозитории
 services.AddScoped<AudioRecordRepository>();
+services.AddScoped<AuthorRepository>();
+services.AddScoped<GenreRepository>();
 
 
 //rabbit

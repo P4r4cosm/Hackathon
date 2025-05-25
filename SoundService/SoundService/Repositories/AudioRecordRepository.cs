@@ -20,6 +20,43 @@ public class AudioRecordRepository
         _logger = logger;
     }
 
+    public async Task EditTitleAsync(int id, string title)
+    {
+        var track = await _dbContext.AudioRecords.FirstOrDefaultAsync(a => a.Id == id);
+        if (track != null)
+        {
+            var oldName =
+                track.Title; // Сохраняем старое имя на случай, если оно понадобится для логирования или сложной логики
+            track.Title = title;
+            if (oldName == title)
+            {
+                _logger.LogInformation(
+                    "Название трека ID {TrackId} не изменилось ('{Title}'). Обновление Elasticsearch пропущено.",
+                    id, title);
+                return; // Выходим, если имя не изменилось
+            }
+
+            await _dbContext.SaveChangesAsync();
+            // Получаем аудиозапись из Elasticsearch (для проверки существования)
+            var elasticRecord = await GetTrackTextByIdAsync(id);
+            if (elasticRecord == null)
+            {
+                _logger.LogWarning(
+                    "Документ с ID {Id} не найден в Elasticsearch. Продолжаем обновление только в базе данных.", id);
+            }
+
+            // Обновляем поле Title в Elasticsearch
+            elasticRecord.Title = title;
+
+            // Сохраняем изменения обратно в Elasticsearch
+            await SaveAsync(elasticRecord);
+
+            _logger.LogInformation(
+                "Название аудиозаписи с ID {Id} успешно обновлено в базе данных и Elasticsearch на '{Title}'.", id,
+                title);
+        }
+    }
+
     public async Task<AudioRecord> SaveAsync(AudioRecord audioRecord)
     {
         _dbContext.AudioRecords.Add(audioRecord); // Добавляем аудиозапись в контекст
@@ -39,6 +76,22 @@ public class AudioRecordRepository
         else
         {
             _logger.LogInformation("Elasticsearch save complete.");
+        }
+    }
+
+    public async Task SaveAsync(IEnumerable<AudioRecordForElastic> audioRecords)
+    {
+        var bulkResponse = await _elasticClient.BulkAsync(b => b
+            .IndexMany(audioRecords)
+        );
+        if (!bulkResponse.IsValidResponse)
+        {
+            _logger.LogError("Error saving multiple documents to Elasticsearch: {ErrorReason}",
+                bulkResponse.DebugInformation);
+        }
+        else
+        {
+            _logger.LogInformation("Elasticsearch bulk save complete. Saved {count} documents", audioRecords.Count());
         }
     }
 
@@ -181,7 +234,6 @@ public class AudioRecordRepository
                         //.Terms(new TermsQueryField(keywords.Cast<object>().ToList())) // Для NEST 7.x
                         .Terms(new TermsQueryField(keywords.Select(name => FieldValue.String(name))
                             .ToArray())) // Для Elastic.Clients.Elasticsearch 8.x
-                   
                 )
             )
         );
@@ -208,7 +260,6 @@ public class AudioRecordRepository
                         //.Terms(new TermsQueryField(keywords.Cast<object>().ToList())) // Для NEST 7.x
                         .Terms(new TermsQueryField(tags.Select(name => FieldValue.String(name))
                             .ToArray())) // Для Elastic.Clients.Elasticsearch 8.x
-                   
                 )
             )
         );
