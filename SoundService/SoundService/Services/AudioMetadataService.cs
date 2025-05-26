@@ -128,8 +128,8 @@ public class AudioMetadataService
             Album = album,
             AudioGenres = audioGenres,
             Duration = file.Properties.Duration,
-            AudioKeywords = new List<AudioKeyword>(),
-            AudioThematicTags = new List<AudioThematicTag>()
+            //AudioKeywords = new List<AudioKeyword>(),
+            //AudioThematicTags = new List<AudioThematicTag>()
         };
 
         return audioRecord;

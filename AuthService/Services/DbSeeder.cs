@@ -23,14 +23,9 @@ public class DbSeeder
         _context = context;
     }
 
-    public void Seed()
-    {
-        _context.Database.Migrate();
-    }
-
     public async Task SeedAsync(string[] rolesToCreate)
     {
-        Seed();
+        await _context.Database.MigrateAsync();
         foreach (var roleName in rolesToCreate)
         {
             if (!await _roleManager.RoleExistsAsync(roleName))

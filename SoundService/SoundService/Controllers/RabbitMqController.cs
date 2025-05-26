@@ -27,5 +27,11 @@ public class RabbitMqController: ControllerBase
          await _rabbitMQService.PublishDemucsTask(demucsTaskData);
         return Ok("Сообщение отправлено");
     }
+
+    [HttpPost("transcript")]
+    public async Task<IActionResult> Transcipt()
+    {
+        return Ok();
+    }
    
 }

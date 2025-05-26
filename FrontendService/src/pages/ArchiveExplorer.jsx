@@ -1,8 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 
 import { Error, Loader, RecordingCard } from '../components';
-import { useGetAllRecordingsQuery, useGetTagsQuery, useGetAuthorsQuery } from '../redux/services/audioArchiveApi';
+import { 
+  useGetAllRecordingsQuery, 
+  useGetTagsQuery, 
+  useGetAuthorsQuery,
+  useGetRecordingsByTagsMutation,
+  useGetRecordingsByAuthorQuery,
+  useGetRecordingsByYearQuery,
+  useGetGenresQuery,
+  useGetRecordingsByGenreQuery
+} from '../redux/services/audioArchiveApi';
 
 const ArchiveExplorer = () => {
   const { activeSong, isPlaying } = useSelector((state) => state.player);
@@ -10,33 +19,139 @@ const ArchiveExplorer = () => {
     tags: [],
     years: [],
     authors: [],
+    genres: []
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [yearRange, setYearRange] = useState({ min: 1941, max: 1945 });
+  const [paginationParams, setPaginationParams] = useState({
+    from: 0,
+    count: 20
+  });
+  const [filteredRecordings, setFilteredRecordings] = useState([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const { data: recordings, isFetching: isRecordingsFetching, error: recordingsError } = useGetAllRecordingsQuery();
+  // Загрузка основных данных
+  const { data: allRecordings, isFetching: isRecordingsFetching, error: recordingsError } = 
+    useGetAllRecordingsQuery(paginationParams);
   const { data: tags, isFetching: isTagsFetching } = useGetTagsQuery();
   const { data: authors, isFetching: isAuthorsFetching } = useGetAuthorsQuery();
+  const { data: genres, isFetching: isGenresFetching } = useGetGenresQuery();
 
-  if (isRecordingsFetching || isTagsFetching || isAuthorsFetching) {
-    return <Loader title="Загрузка архива..." />;
-  }
+  // Запросы для фильтрации
+  const [getRecordingsByTags] = useGetRecordingsByTagsMutation();
+  
+  // Для активного фильтра по автору
+  const { data: authorRecordings, isFetching: isAuthorRecordingsFetching } = 
+    useGetRecordingsByAuthorQuery(
+      { id: activeFilters.authors[0], ...paginationParams },
+      { skip: activeFilters.authors.length === 0 }
+    );
+  
+  // Для активного фильтра по году
+  const { data: yearRecordings, isFetching: isYearRecordingsFetching } = 
+    useGetRecordingsByYearQuery(
+      { year: activeFilters.years[0], ...paginationParams },
+      { skip: activeFilters.years.length === 0 }
+    );
+  
+  // Для активного фильтра по жанру
+  const { data: genreRecordings, isFetching: isGenreRecordingsFetching } = 
+    useGetRecordingsByGenreQuery(
+      { id: activeFilters.genres[0], ...paginationParams },
+      { skip: activeFilters.genres.length === 0 }
+    );
 
-  if (recordingsError) {
-    return <Error />;
-  }
+  // Обработка изменений фильтров и загрузка отфильтрованных данных
+  useEffect(() => {
+    const loadFilteredData = async () => {
+      try {
+        // Сбрасываем пагинацию при смене фильтров
+        if (paginationParams.from !== 0) {
+          setPaginationParams({
+            from: 0,
+            count: 20
+          });
+          return; // useEffect сработает повторно с обновлёнными параметрами пагинации
+        }
+
+        setIsLoadingMore(true);
+        let recordingsToShow = allRecordings || [];
+
+        // Приоритет фильтров: теги > авторы > годы > жанры
+        if (activeFilters.tags.length > 0) {
+          const response = await getRecordingsByTags({
+            tags: activeFilters.tags,
+            ...paginationParams
+          });
+          if (response.data) {
+            recordingsToShow = response.data;
+          }
+        } else if (activeFilters.authors.length > 0) {
+          recordingsToShow = authorRecordings || [];
+        } else if (activeFilters.years.length > 0) {
+          recordingsToShow = yearRecordings || [];
+        } else if (activeFilters.genres.length > 0) {
+          recordingsToShow = genreRecordings || [];
+        }
+
+        // Применяем текстовый поиск на клиентской стороне
+        if (searchTerm) {
+          recordingsToShow = recordingsToShow.filter(recording => 
+            recording.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            recording.authorName.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        }
+
+        setFilteredRecordings(recordingsToShow);
+        setIsLoadingMore(false);
+      } catch (error) {
+        console.error('Ошибка при загрузке данных:', error);
+        setIsLoadingMore(false);
+      }
+    };
+
+    loadFilteredData();
+  }, [
+    allRecordings, 
+    activeFilters, 
+    searchTerm, 
+    paginationParams,
+    authorRecordings,
+    yearRecordings,
+    genreRecordings,
+    getRecordingsByTags
+  ]);
 
   // Функция для обработки изменений в фильтрах
   const handleFilterChange = (filterType, value) => {
     setActiveFilters(prev => {
       const newFilters = { ...prev };
       
+      // Сбрасываем все другие фильтры при выборе нового
+      if (filterType === 'tags') {
+        newFilters.authors = [];
+        newFilters.years = [];
+        newFilters.genres = [];
+      } else if (filterType === 'authors') {
+        newFilters.tags = [];
+        newFilters.years = [];
+        newFilters.genres = [];
+      } else if (filterType === 'years') {
+        newFilters.tags = [];
+        newFilters.authors = [];
+        newFilters.genres = [];
+      } else if (filterType === 'genres') {
+        newFilters.tags = [];
+        newFilters.authors = [];
+        newFilters.years = [];
+      }
+      
+      // Обновляем выбранный фильтр
       if (newFilters[filterType].includes(value)) {
         // Удаляем фильтр если он уже выбран
         newFilters[filterType] = newFilters[filterType].filter(item => item !== value);
       } else {
-        // Добавляем фильтр
-        newFilters[filterType] = [...newFilters[filterType], value];
+        // Добавляем фильтр, заменяя предыдущий
+        newFilters[filterType] = [value];
       }
       
       return newFilters;
@@ -49,42 +164,43 @@ const ArchiveExplorer = () => {
       tags: [],
       years: [],
       authors: [],
+      genres: []
     });
     setSearchTerm('');
   };
 
-  // Получение отфильтрованных записей
-  const filteredRecordings = recordings?.filter(recording => {
-    // Фильтр по поиску
-    if (searchTerm && !recording.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
-        !recording.author.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false;
-    }
-    
-    // Фильтр по тегам
-    if (activeFilters.tags.length > 0 && 
-        !recording.tags.some(tag => activeFilters.tags.includes(tag.id))) {
-      return false;
-    }
-    
-    // Фильтр по годам
-    if (activeFilters.years.length > 0 && 
-        !activeFilters.years.includes(recording.year.toString())) {
-      return false;
-    }
-    
-    // Фильтр по авторам
-    if (activeFilters.authors.length > 0 && 
-        !activeFilters.authors.includes(recording.authorId)) {
-      return false;
-    }
-    
-    return true;
-  });
+  // Функция для загрузки дополнительных записей
+  const loadMoreRecordings = () => {
+    setPaginationParams(prev => ({
+      from: prev.from + prev.count,
+      count: prev.count
+    }));
+  };
 
-  // Получение уникальных годов из данных
-  const years = recordings 
-    ? [...new Set(recordings.map(recording => recording.year.toString()))]
+  // Определяем, загружаются ли данные
+  const isLoading = 
+    isRecordingsFetching || 
+    isTagsFetching || 
+    isAuthorsFetching || 
+    isGenresFetching ||
+    isAuthorRecordingsFetching ||
+    isYearRecordingsFetching ||
+    isGenreRecordingsFetching ||
+    isLoadingMore;
+
+  if (isLoading && filteredRecordings.length === 0) {
+    return <Loader title="Загрузка архива..." />;
+  }
+
+  if (recordingsError) {
+    console.error('Error loading recordings:', recordingsError);
+    return <Error message={`Ошибка при загрузке данных. ${recordingsError.status === 'FETCH_ERROR' ? 'Сервер недоступен. Проверьте подключение или убедитесь, что API сервер запущен.' : recordingsError.error}`} />;
+  }
+
+  // Получение уникальных годов из данных (если доступны)
+  const years = allRecordings 
+    ? [...new Set(allRecordings.map(recording => recording.year?.toString()))]
+        .filter(year => year) // Убираем null/undefined
         .sort((a, b) => parseInt(a) - parseInt(b)) 
     : [];
 
@@ -123,6 +239,26 @@ const ArchiveExplorer = () => {
                   }`}
                 >
                   {tag.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          {/* Фильтр по жанрам */}
+          <div className="mb-4">
+            <h4 className="text-gray-300 mb-2">Жанры</h4>
+            <div className="flex flex-wrap gap-2">
+              {genres?.map(genre => (
+                <button
+                  key={genre.id}
+                  onClick={() => handleFilterChange('genres', genre.id)}
+                  className={`py-1 px-3 rounded-full text-sm ${
+                    activeFilters.genres.includes(genre.id) 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-black/30 text-gray-300'
+                  }`}
+                >
+                  {genre.name}
                 </button>
               ))}
             </div>
@@ -181,16 +317,27 @@ const ArchiveExplorer = () => {
       {/* Результаты */}
       <div className="flex flex-wrap sm:justify-start justify-center gap-8">
         {filteredRecordings?.length > 0 ? (
-          filteredRecordings.map((recording, i) => (
-            <RecordingCard
-              key={recording.id}
-              recording={recording}
-              isPlaying={isPlaying}
-              activeSong={activeSong}
-              data={filteredRecordings}
-              i={i}
-            />
-          ))
+          <>
+            {filteredRecordings.map((recording, i) => (
+              <RecordingCard
+                key={`${recording.id}-${i}`}
+                recording={recording}
+                isPlaying={isPlaying}
+                activeSong={activeSong}
+                data={filteredRecordings}
+                i={i}
+              />
+            ))}
+            <div className="w-full flex justify-center mt-8">
+              <button 
+                onClick={loadMoreRecordings}
+                className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Загрузка...' : 'Загрузить еще'}
+              </button>
+            </div>
+          </>
         ) : (
           <p className="text-gray-400 text-lg">Нет записей, соответствующих выбранным фильтрам.</p>
         )}
