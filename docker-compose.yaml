@@ -366,6 +366,6 @@ volumes:
   demucs_models_cache: {} # Том для кэширования моделей Demucs
   rabbitmq_data: {}
   whisper_models_cache: {} # Том для кэширования моделей Whisper
-  
+  historical_denoise_models_cache: {} # Том для кэширования Historical Denoise
   es_data:
   es_logs:
