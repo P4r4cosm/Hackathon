@@ -34,18 +34,23 @@ RABBITMQ_CONSUME_EXCHANGE_NAME = os.getenv("RABBITMQ_AUDIO_PROCESSING_EXCHANGE",
 RABBITMQ_CONSUME_ROUTING_KEY = os.getenv("RABBITMQ_WHISPER_TASKS_ROUTING_KEY", "whisper.task")
 
 RABBITMQ_PUBLISH_EXCHANGE_NAME = os.getenv("RABBITMQ_RESULTS_EXCHANGE_NAME", "results_exchange")
-RABBITMQ_PUBLISH_ROUTING_KEY_PREFIX = os.getenv("RABBITMQ_TASK_RESULTS_ROUTING_KEY_PREFIX", "task.result") # e.g., task.result.whisper
+RABBITMQ_PUBLISH_ROUTING_KEY_PREFIX = os.getenv("RABBITMQ_TASK_RESULTS_ROUTING_KEY_PREFIX", "task.result")
 
 # --- MinIO Configuration ---
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+
+if not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
+    logger.critical("КРИТИЧЕСКАЯ ОШИБКА: Переменные окружения MINIO_ACCESS_KEY и MINIO_SECRET_KEY должны быть установлены.")
+    exit(1)
+
 MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "audio-processing")
 MINIO_USE_SSL = os.getenv("MINIO_USE_SSL", "False").lower() == "true"
 
 # --- Whisper Configuration ---
-WHISPER_MODEL_NAME = os.getenv("WHISPER_MODEL_NAME", "base") # "tiny", "base", "small", "medium", "large"
-WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE") # e.g., "en", "ru". If None, auto-detects.
+WHISPER_MODEL_NAME = os.getenv("WHISPER_MODEL_NAME", "base")
+WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE")
 WHISPER_CACHE_DIR = os.getenv("WHISPER_CACHE_DIR", "/app/.cache/whisper")
 
 # --- Connection Retries ---
@@ -110,14 +115,13 @@ def transcribe_audio(audio_file_path, model_name=WHISPER_MODEL_NAME, language=WH
     """
     try:
         logger.info(f"Loading Whisper model: {model_name} with cache_dir: {cache_dir}")
-        # Убедимся, что директория для кэша существует и доступна для записи
         Path(cache_dir).mkdir(parents=True, exist_ok=True)
-        os.chmod(cache_dir, 0o777) # Даем права, если они были сброшены
+        os.chmod(cache_dir, 0o777) # Установка прав на кэш-директорию
 
         model = whisper.load_model(model_name, download_root=cache_dir)
         logger.info(f"Whisper model {model_name} loaded. Starting transcription for {audio_file_path}...")
 
-        transcribe_options = {"fp16": False} # Установите True, если у вас GPU с поддержкой fp16
+        transcribe_options = {"fp16": False}
         if language:
             transcribe_options["language"] = language
 
@@ -133,12 +137,10 @@ def publish_result(channel, result_message, task_id, service_name="whisper"):
     """Публикует результат обработки в RabbitMQ."""
     try:
         routing_key = f"{RABBITMQ_PUBLISH_ROUTING_KEY_PREFIX}.{service_name}"
-        # Добавляем task_id в сообщение, если его еще нет
         if isinstance(result_message, dict) and 'task_id' not in result_message:
             result_message['task_id'] = task_id
-        elif isinstance(result_message, str): # если результат просто текст
+        elif isinstance(result_message, str):
              result_message = {'task_id': task_id, 'text': result_message}
-
 
         channel.basic_publish(
             exchange=RABBITMQ_PUBLISH_EXCHANGE_NAME,
@@ -156,17 +158,17 @@ def publish_result(channel, result_message, task_id, service_name="whisper"):
 
 def callback(ch, method, properties, body):
     """Обработчик сообщений из RabbitMQ."""
-    task_id = properties.correlation_id # Получаем task_id из correlation_id
+    task_id = properties.correlation_id
     try:
         message = json.loads(body.decode())
         logger.info(f"Received message for task_id: {task_id}, body: {message}")
 
         input_object_name = message.get("input_minio_object_name")
-        output_prefix = message.get("output_minio_prefix", "whisper_output/") # Префикс для выходных файлов
+        output_prefix = message.get("output_minio_prefix", "whisper_output/")
 
         if not input_object_name:
             logger.error(f"Task_id {task_id}: Missing 'input_minio_object_name' in message.")
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False) # Не переотправлять
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
 
         minio_client = get_minio_client()
@@ -177,14 +179,13 @@ def callback(ch, method, properties, body):
             logger.info(f"Task_id {task_id}: Downloading {input_object_name} to {local_audio_file}")
             if not download_file_from_minio(minio_client, MINIO_BUCKET_NAME, input_object_name, str(local_audio_file)):
                 logger.error(f"Task_id {task_id}: Failed to download {input_object_name}. Skipping.")
-                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True) # Можно попробовать переотправить позже
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
                 return
 
             logger.info(f"Task_id {task_id}: Starting transcription for {local_audio_file}")
             transcription_result = transcribe_audio(str(local_audio_file))
 
             if transcription_result:
-                # Сохраняем полный результат транскрибации в JSON
                 output_json_filename = f"{Path(input_object_name).stem}_transcription.json"
                 output_json_path = Path(tmpdir) / output_json_filename
                 with open(output_json_path, 'w', encoding='utf-8') as f:
@@ -193,7 +194,6 @@ def callback(ch, method, properties, body):
                 output_json_minio_object_name = f"{output_prefix.rstrip('/')}/{output_json_filename}"
                 upload_file_to_minio(minio_client, MINIO_BUCKET_NAME, str(output_json_path), output_json_minio_object_name)
 
-                # Сохраняем только текст в .txt файл
                 output_txt_filename = f"{Path(input_object_name).stem}_transcription.txt"
                 output_txt_path = Path(tmpdir) / output_txt_filename
                 with open(output_txt_path, 'w', encoding='utf-8') as f:
@@ -224,17 +224,15 @@ def callback(ch, method, properties, body):
                     "original_input_object": input_object_name,
                     "error_message": "Transcription failed in whisper_worker."
                 }
-                publish_result(ch, error_message, task_id, service_name="whisper.error") # Отдельный роутинг для ошибок
-                ch.basic_ack(delivery_tag=method.delivery_tag) # Подтверждаем, т.к. обработали (сообщили об ошибке)
+                publish_result(ch, error_message, task_id, service_name="whisper.error")
+                ch.basic_ack(delivery_tag=method.delivery_tag)
         
     except json.JSONDecodeError as e:
         logger.error(f"Task_id {task_id}: Failed to decode JSON message: {e}. Body: {body}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False) # Сообщение битое
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
     except Exception as e:
         logger.error(f"Task_id {task_id}: Unhandled exception in callback: {e}")
         logger.error(traceback.format_exc())
-        # Вместо nack с requeue=True, лучше отправить сообщение об ошибке, если это возможно
-        # или nack без requeue, чтобы избежать бесконечного цикла обработки сбойного сообщения.
         try:
             error_message = {
                 "task_id": task_id,
@@ -242,19 +240,18 @@ def callback(ch, method, properties, body):
                 "service": "whisper",
                 "error_message": f"Unhandled exception in callback: {str(e)}"
             }
-            # Попытка отправить сообщение об ошибке (канал может быть уже закрыт)
             if ch.is_open:
                  publish_result(ch, error_message, task_id, service_name="whisper.error")
         except Exception as pub_e:
             logger.error(f"Task_id {task_id}: Failed to publish critical error message: {pub_e}")
 
         if ch.is_open:
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False) # Не переотправлять
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 
 def main():
     """Основная функция запуска воркера."""
-    minio_client = get_minio_client() # Проверим подключение к MinIO при старте
+    minio_client = get_minio_client()
     if not minio_client:
         logger.error("Could not connect to MinIO. Exiting.")
         return
@@ -296,20 +293,20 @@ def main():
 
             logger.info(f"[*] Waiting for messages in queue '{RABBITMQ_CONSUME_QUEUE_NAME}'. To exit press CTRL+C")
             channel.start_consuming()
-            break # Выход из цикла, если подключение и старт успешны
+            break
         except pika.exceptions.AMQPConnectionError as e:
             logger.error(f"RabbitMQ connection failed (attempt {attempt + 1}): {e}")
             if attempt < MAX_RETRIES_RABBITMQ - 1:
                 time.sleep(RECONNECT_DELAY_SECONDS)
             else:
                 logger.error("Max retries reached. Could not connect to RabbitMQ.")
-                return # Выход, если все попытки неудачны
+                return
         except Exception as e:
             logger.error(f"An unexpected error occurred: {e}")
             logger.error(traceback.format_exc())
             if connection and connection.is_open:
                 connection.close()
-            return # Выход при других ошибках
+            return
 
     logger.info("Shutting down whisper_worker.")
     if connection and connection.is_open:
