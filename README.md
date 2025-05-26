@@ -2,11 +2,13 @@
 ![Архитектура проекта](photos\architecture.png)
 
 # Пример работы
-![Интерфейс](photos\1.jpg)
-![Интерфейс](photos\2.jpg)
-![Интерфейс](photos\3.jpg)
-![Интерфейс](photos\4.jpg)
-![Интерфейс](photos\5.jpg)
+![Интерфейс1](https://raw.githubusercontent.com/P4r4cosm/Hackathon/9bc6f86a78ab5f94ebe7ca5f8f9a32421f2746f8/photos1.png)
+![Интерфейс2](photos\2.jpg)
+![Интерфейс3](photos\3.jpg)
+![Интерфейс4](photos\4.jpg)
+![Интерфейс5](photos\5.jpg)
+
+https://github.com/P4r4cosm/Hackathon/blob/master/photos/architecture.png
 
 # Аудио примеры вы можете найти в директории example
 
