@@ -326,6 +326,16 @@ export const audioArchiveApi = createApi({
       invalidatesTags: ['Recording']
     }),
     
+    // Обновление транскрипции
+    updateTranscription: builder.mutation({
+      query: ({ recordingId, text }) => ({
+        url: `/track_text/${recordingId}`,
+        method: 'POST',
+        body: { fullText: text },
+      }),
+      invalidatesTags: ['Recording']
+    }),
+    
     // Скачивание аудиофайла
     downloadAudio: builder.query({
       query: (path) => ({
@@ -352,5 +362,6 @@ export const {
   useGetKeywordsQuery,
   useGetStatisticsQuery,
   useUploadRecordingMutation,
+  useUpdateTranscriptionMutation,
   useDownloadAudioQuery,
 } = audioArchiveApi; 

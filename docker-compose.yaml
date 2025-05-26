@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -58,8 +58,7 @@ services:
     volumes:
       - ./cert.pfx:/app/cert.pfx
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
   gateway:
     build:
       context: . # Контекст сборки - корень проекта
@@ -297,68 +296,6 @@ services:
             - driver: nvidia
               count: 1 # или 'all'
               capabilities: [gpu]
-
-  # Сервис для сборки базового образа historical-denoiser
-  historical_denoise_base:
-    build:
-      context: ./historical-denoise # Предполагается, что здесь лежит Dockerfile для базового образа
-      dockerfile: Dockerfile       # Имя Dockerfile в этой директории
-    image: historical-denoiser:latest # Присваиваем имя образу, которое используется в FROM worker'а
-    container_name: historical_denoise_base_builder # Имя контейнера для сборки (не будет работать постоянно)
-    # Этот сервис нужен только для сборки образа, его не нужно запускать постоянно
-
-  historical_denoise_worker:
-    build:
-      context: ./HistoricalDenoiseWorker
-      dockerfile: Dockerfile
-    container_name: historical_denoise_worker_1
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      - LOG_LEVEL=INFO
-      - RABBITMQ_HOST=${RABBITMQ_HOST}
-      - RABBITMQ_PORT=${RABBITMQ_PORT} # Добавил порт, если он нужен app.py воркера
-      - RABBITMQ_USER=${RABBITMQ_USER}
-      - RABBITMQ_PASS=${RABBITMQ_PASS}
-      - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
-      - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_HISTORICAL_DENOISE_QUEUE_NAME:-historical_denoise_tasks_queue} # Используйте переменную из .env или значение по умолчанию
-      - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE:-audio_processing_exchange}
-      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_HISTORICAL_DENOISE_ROUTING_KEY:-historical_denoise.task}
-      - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME:-results_exchange}
-      - RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY:-task.result}
-
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY} # Используйте переменную из .env
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY} # Используйте переменную из .env
-      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
-      - MINIO_USE_SSL=False
-
-      # Переменные для повторных попыток подключения к RabbitMQ (если используются в app.py)
-      - MAX_RETRIES_RABBITMQ=${MAX_RETRIES_RABBITMQ:-5}
-      - RECONNECT_DELAY_SECONDS=${RECONNECT_DELAY_SECONDS:-5}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # Для Docker-out-of-Docker
-      # Том для кэша моделей historical-denoise, если он вынесен наружу в его Dockerfile
-      # Например, если checkpoint.zip скачивается в /app/experiments, а не в /app/experiments/trained_model
-      # и historical-denoise/Dockerfile ожидает /app/experiments/trained_model при запуске,
-      # то отдельный том для cache не нужен, т.к. все внутри образа historical-denoiser.
-      # - historical_denoise_models_cache:/app/experiments/trained_model # Пример, если нужно
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      minio:
-        condition: service_started
-      historical_denoise_base: # <--- ДОБАВЛЕНО
-        condition: service_completed_successfully # <--- ДОБАВЛЕНО
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
   rabbitmq: # Имя сервиса, по которому другие контейнеры будут к нему обращаться
     image: rabbitmq:3-management-alpine # Образ с UI для управления
     container_name: rabbitmq_broker # Имя самого контейнера
@@ -384,4 +321,3 @@ volumes:
   rabbitmq_data: {}
   es_data:
   es_logs:
-  postgres_data: {} # Том для хранения данных PostgreSQL

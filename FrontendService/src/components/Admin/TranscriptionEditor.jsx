@@ -5,7 +5,6 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
   const [transcriptionText, setTranscriptionText] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editStatus, setEditStatus] = useState({ status: '', message: '' });
-  const [saving, setSaving] = useState(false);
   
   const [updateTranscription, { isLoading }] = useUpdateTranscriptionMutation();
   
@@ -29,17 +28,6 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
     setEditStatus({ status: '', message: '' });
   };
   
-  // Имитация процесса сохранения
-  const simulateSaving = () => {
-    return new Promise((resolve) => {
-      setSaving(true);
-      setTimeout(() => {
-        setSaving(false);
-        resolve();
-      }, 1500);
-    });
-  };
-  
   const handleSaveClick = async () => {
     try {
       setEditStatus({ 
@@ -47,10 +35,13 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
         message: 'Сохранение изменений...' 
       });
       
-      // Имитация сохранения
-      await simulateSaving();
+      // Вызываем реальное API для обновления транскрипции
+      await updateTranscription({
+        recordingId,
+        text: transcriptionText
+      }).unwrap();
       
-      // Имитация успешного ответа
+      // Обработка успешного ответа
       setEditMode(false);
       setEditStatus({ 
         status: 'success', 
@@ -63,9 +54,10 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
       }, 3000);
       
     } catch (error) {
+      console.error('Ошибка при сохранении транскрипции:', error);
       setEditStatus({ 
         status: 'error', 
-        message: `Ошибка при сохранении: ${error.message || 'Неизвестная ошибка'}` 
+        message: `Ошибка при сохранении: ${error.data?.message || error.message || 'Неизвестная ошибка'}` 
       });
     }
   };
@@ -86,17 +78,17 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
           <div className="flex space-x-2">
             <button 
               onClick={handleCancelClick}
-              disabled={saving}
+              disabled={isLoading}
               className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded disabled:opacity-50"
             >
               Отмена
             </button>
             <button 
               onClick={handleSaveClick}
-              disabled={saving}
+              disabled={isLoading}
               className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded disabled:opacity-50"
             >
-              {saving ? 'Сохранение...' : 'Сохранить'}
+              {isLoading ? 'Сохранение...' : 'Сохранить'}
             </button>
           </div>
         )}

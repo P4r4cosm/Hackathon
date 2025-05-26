@@ -136,13 +136,3 @@ if (app.Environment.IsDevelopment())
 }
 
 //app.UseHttpsRedirection();
-
-app.UseRouting(); // <-- Добавляем UseRouting перед Auth
-
-app.UseCors(); // Разрешаем CORS
-
-app.UseAuthentication(); // Сначала проверяем, аутентифицирован ли пользователь
-app.UseAuthorization(); // Затем проверяем, авторизован ли он для доступа к ресурсу
-
-app.MapControllers(); // Сопоставляем запросы с контроллерами
-app.Run();

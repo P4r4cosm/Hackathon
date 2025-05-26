@@ -25,7 +25,42 @@ public class DbSeeder
 
     public void Seed()
     {
-        _context.Database.Migrate();
+        try
+        {
+            // Сначала проверяем, можем ли подключиться к базе данных
+            if (_context.Database.CanConnect())
+            {
+                // Если таблицы не существуют, создаем их
+                if (!_context.Database.GetPendingMigrations().Any())
+                {
+                    // База данных существует и миграции применены
+                    Console.WriteLine("База данных уже существует и все миграции применены.");
+                    return;
+                }
+            }
+
+            // Если не можем подключиться или есть ожидающие миграции
+            Console.WriteLine("Применяем миграции к базе данных...");
+            _context.Database.Migrate();
+            Console.WriteLine("Миграции успешно применены.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при миграции базы данных: {ex.Message}");
+            
+            // Последняя попытка - создание схемы через EnsureCreated
+            try
+            {
+                Console.WriteLine("Попытка создать схему через EnsureCreated...");
+                _context.Database.EnsureCreated();
+                Console.WriteLine("Схема базы данных успешно создана.");
+            }
+            catch (Exception createEx)
+            {
+                Console.WriteLine($"Не удалось создать схему: {createEx.Message}");
+                throw; // Пробрасываем исключение дальше
+            }
+        }
     }
 
     public async Task SeedAsync(string[] rolesToCreate)
