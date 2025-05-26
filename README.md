@@ -8,7 +8,40 @@
 ![Интерфейс4](https://github.com/P4r4cosm/Hackathon/blob/ae217addc77ee62bfba7e17c96fbba8d5d90c421/photos/4.jpg)
 ![Интерфейс5](https://github.com/P4r4cosm/Hackathon/blob/ae217addc77ee62bfba7e17c96fbba8d5d90c421/photos/5.jpg)
 
-# Аудио примеры вы можете найти в директории example
+# Аудио примеры 
+
+## Разделение песен на две дорожки через demucs при самых минимальных настройках с работой на процессоре, модель htdemucs_ft:
+
+### Оригинал
+<audio controls>
+  <source src="https://p4r4cosm.github.io/Hackathon/audio/8_orig.flac" type="audio/flac">
+  Ваш браузер не поддерживает аудио.
+</audio>
+
+### Обработанная версия
+<audio controls>
+  <source src="https://p4r4cosm.github.io/Hackathon/audio/8vocals.wav" type="audio/wav">
+  Ваш браузер не поддерживает аудио.
+</audio>
+
+<audio controls>
+  <source src="https://p4r4cosm.github.io/Hackathon/audio/8no_vocals.wav" type="audio/wav">
+  Ваш браузер не поддерживает аудио.
+</audio>
+
+## Обработка historical-denoise с работой на процессоре:
+
+### Оригинал:
+<audio controls>
+  <source src="https://p4r4cosm.github.io/Hackathon/audio/14_war_m_undenoised.flac" type="audio/flac">
+  Ваш браузер не поддерживает аудио.
+</audio>
+
+### Обработанная версия:
+<audio controls>
+  <source src="https://p4r4cosm.github.io/Hackathon/audio/14_war_m_denoised.wav" type="audio/wav">
+  Ваш браузер не поддерживает аудио.
+</audio>
 
 # Описание Проекта
 
