@@ -9,4 +9,3 @@
 [submodule "whisperDocker"]
 	path = whisperDocker
 	url = https://github.com/ExodusOfGraf/whisperDocker.git
-
