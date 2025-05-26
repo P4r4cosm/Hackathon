@@ -19,11 +19,11 @@ public class AudioRecord
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     //public string? UploadUserId { get; set; }         // Кто загрузил
 
-    public ICollection<AudioKeyword> AudioKeywords { get; set; }
-    public ICollection<AudioThematicTag> AudioThematicTags { get; set; }
+    //public ICollection<AudioKeyword> AudioKeywords { get; set; }
+    //public ICollection<AudioThematicTag> AudioThematicTags { get; set; }
     
     public  ICollection<AudioGenre> AudioGenres { get; set; }
     //public ICollection<TranscriptSegment> TranscriptSegments { get; set; }
     //public string FullText { get; set; }
-    public ModerationStatus ModerationStatus { get; set; }
+    public ModerationStatus ModerationStatus { get; set; } = new ModerationStatus();
 }

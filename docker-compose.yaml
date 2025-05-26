@@ -447,3 +447,5 @@ volumes:
   whisper_models_cache: {} # Том для кэширования моделей Whisper
   es_data:
   es_logs:
+
+
