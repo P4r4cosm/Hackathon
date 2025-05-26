@@ -243,61 +243,63 @@ services:
       - ./init-mc.sh:/usr/local/bin/init-mc.sh # Монтируем скрипт
     entrypoint: ["/usr/local/bin/init-mc.sh"]  
 
-  demucs_service: # Этот сервис теперь в основном для сборки образа
-    build:
-      context: ./demucs
-      dockerfile: Dockerfile
-    image: local/demucs_app # Присваиваем имя собираемому образу
-    container_name: demucs_build_helper # Имя контейнера не так важно, т.к. он не будет постоянно работать
-    volumes:
-      # Эти тома здесь для того, чтобы docker-compose их "знал",
-      # но фактическое использование будет при docker run из FlaskServise.
-      # Монтирование в этом сервисе не имеет смысла, так как он не будет запущен.
-      # Однако, demucs_models_cache может быть полезен, если demucs/Dockerfile
-      # скачивает модели при сборке и кладет их в /data/models.
-      - demucs_models_cache:/data/models
+  # demucs_service: # Этот сервис теперь в основном для сборки образа
+  #   build:
+  #     context: ./demucs
+  #     dockerfile: Dockerfile
+  #   image: local/demucs_app # Присваиваем имя собираемому образу
+  #   container_name: demucs_build_helper # Имя контейнера не так важно, т.к. он не будет постоянно работать
+  #   volumes:
+  #     # Эти тома здесь для того, чтобы docker-compose их "знал",
+  #     # но фактическое использование будет при docker run из FlaskServise.
+  #     # Монтирование в этом сервисе не имеет смысла, так как он не будет запущен.
+  #     # Однако, demucs_models_cache может быть полезен, если demucs/Dockerfile
+  #     # скачивает модели при сборке и кладет их в /data/models.
+  #     - demucs_models_cache:/data/models
 
 
-  demucs_worker: # Новый Python воркер
-    build:
-      context: ./DemucsWorker # Предполагается, что Dockerfile и скрипт в этой папке
-      dockerfile: Dockerfile # Имя Dockerfile (из предыдущего ответа)
-    container_name: demucs_worker_1
-    restart: unless-stopped
-    env_file:
-      - .env # Все переменные для RabbitMQ, MinIO и Demucs должны быть здесь
-    environment:
-      # Переопределение или добавление специфичных переменных, если нужно
-      - LOG_LEVEL=INFO # Уровень логирования для воркера
-      # Убедитесь, что эти переменные ниже настроены в .env и совпадают с SoundService
-      - RABBITMQ_HOST=${RABBITMQ_HOST}
-      - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_DEMUCS_QUEUE_NAME}
-      - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE}
-      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_DEMUCS_TASKS_ROUTING_KEY}
-      - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME}
-      - RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY}
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=C5RDgrAREfHtx8lgpayc
-      - MINIO_SECRET_KEY=UYKwpYFjj9ahfea4vCa0ROGhfLiCSsII8LjXwYJc
-      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
-      - DEMUCS_MODEL=htdemucs_ft # или любая другая модель
-    volumes:
-      - demucs_models_cache:/root/.cache/torch #
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      minio:
-        condition: service_started # Или service_completed_successfully для mc-init
-    # --- Для использования GPU (если Dockerfile собран с поддержкой CUDA) ---
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1 # или 'all'
-              capabilities: [gpu]
+  # demucs_worker: # Новый Python воркер
+  #   build:
+  #     context: ./DemucsWorker # Предполагается, что Dockerfile и скрипт в этой папке
+  #     dockerfile: Dockerfile # Имя Dockerfile (из предыдущего ответа)
+  #   container_name: demucs_worker_1
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env # Все переменные для RabbitMQ, MinIO и Demucs должны быть здесь
+  #   environment:
+  #     # Переопределение или добавление специфичных переменных, если нужно
+  #     - LOG_LEVEL=INFO # Уровень логирования для воркера
+  #     # Убедитесь, что эти переменные ниже настроены в .env и совпадают с SoundService
+  #     - RABBITMQ_HOST=${RABBITMQ_HOST}
+  #     - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_DEMUCS_QUEUE_NAME}
+  #     - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE}
+  #     - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_DEMUCS_TASKS_ROUTING_KEY}
+  #     - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME}
+  #     - RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY}
+  #     - MINIO_ENDPOINT=minio:9000
+  #     - MINIO_ACCESS_KEY=C5RDgrAREfHtx8lgpayc
+  #     - MINIO_SECRET_KEY=UYKwpYFjj9ahfea4vCa0ROGhfLiCSsII8LjXwYJc
+  #     - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+  #     - DEMUCS_MODEL=htdemucs_ft # или любая другая модель
+  #   volumes:
+  #     - demucs_models_cache:/root/.cache/torch #
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #     minio:
+  #       condition: service_started # Или service_completed_successfully для mc-init
+  #   # --- Для использования GPU (если Dockerfile собран с поддержкой CUDA) ---
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1 # или 'all'
+  #             capabilities: [gpu]
+
 
   # Сервис для сборки базового образа historical-denoiser
+
   # historical_denoise_base:
   #   build:
   #     context: ./historical-denoise # Предполагается, что здесь лежит Dockerfile для базового образа
@@ -350,7 +352,6 @@ services:
   #       condition: service_started
   #     historical_denoise_base: # <--- ДОБАВЛЕНО
   #       condition: service_completed_successfully # <--- ДОБАВЛЕНО
-
   #   deploy:
   #     resources:
   #       reservations:
@@ -429,7 +430,79 @@ services:
               capabilities: [gpu] # Запросить все доступные GPU (или те, что разрешены Docker)
               # или
               # device_ids: ['0'] # Запросить конкретный GPU по ID
-  
+  #     # historical_denoise_base: # <--- ЗАКОММЕНТИРОВАНО
+  #     #   condition: service_completed_successfully # <--- ЗАКОММЕНТИРОВАНО
+
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+
+  # # Сервис для сборки образа whisper 
+  # whisper_cli_app_builder:
+  #   build:
+  #     context: ./whisperDocker # Путь к вашему whisper CLI приложению
+  #     dockerfile: Dockerfile
+  #   image: local/whisper_cli_app # Имя собираемого образа
+  #   container_name: whisper_cli_app_builder # Имя контейнера для сборки
+  #   # Этот сервис нужен только для сборки образа, его не нужно запускать постоянно
+
+  # whisper_worker:
+  #   build:
+  #     context: ./whisper_worker # Путь к новому whisper_worker
+  #     dockerfile: Dockerfile
+  #   container_name: whisper_worker_1
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - LOG_LEVEL=${LOG_LEVEL:-INFO}
+  #     - RABBITMQ_HOST=${RABBITMQ_HOST}
+  #     - RABBITMQ_PORT=${RABBITMQ_PORT}
+  #     - RABBITMQ_USER=${RABBITMQ_USER}
+  #     - RABBITMQ_PASS=${RABBITMQ_PASS}
+  #     - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
+  #     # Очередь, обменник и ключ для получения задач Whisper
+  #     - RABBITMQ_WHISPER_QUEUE_NAME=${RABBITMQ_WHISPER_QUEUE_NAME:-whisper_tasks_queue}
+  #     - RABBITMQ_AUDIO_PROCESSING_EXCHANGE=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE:-audio_processing_exchange}
+  #     - RABBITMQ_WHISPER_TASKS_ROUTING_KEY=${RABBITMQ_WHISPER_TASKS_ROUTING_KEY:-whisper.task}
+  #     # Обменник и ключ для публикации результатов
+  #     - RABBITMQ_RESULTS_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME:-results_exchange}
+  #     - RABBITMQ_TASK_RESULTS_ROUTING_KEY_PREFIX=${RABBITMQ_TASK_RESULTS_ROUTING_KEY_PREFIX:-task.result} # будет task.result.whisper
+
+  #     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+  #     - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+  #     - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+  #     - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+  #     - MINIO_USE_SSL=${MINIO_USE_SSL:-False}
+
+  #     - WHISPER_MODEL_NAME=${WHISPER_MODEL_NAME:-base} # tiny, base, small, medium, large, large-v2, large-v3
+  #     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE} # Оставьте пустым для автоопределения или укажите (например, en, ru)
+  #     - WHISPER_CACHE_DIR=/app/.cache/whisper # Внутренний путь в контейнере
+
+  #     - MAX_RETRIES_RABBITMQ=${MAX_RETRIES_RABBITMQ:-5}
+  #     - RECONNECT_DELAY_SECONDS=${RECONNECT_DELAY_SECONDS:-5}
+  #   volumes:
+  #     - whisper_models_cache:/app/.cache/whisper # Том для кэширования моделей Whisper
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #     minio:
+  #       condition: service_started
+  #     # Зависимость от whisper_cli_app_builder, если он должен быть собран до запуска воркера
+  #     # Хотя whisper_worker ставит openai-whisper через pip, эта зависимость может быть полезна для порядка сборки
+  #     # whisper_cli_app_builder: # <--- ЗАКОММЕНТИРОВАНО
+  #     #   condition: service_completed_successfully # <--- ЗАКОММЕНТИРОВАНО
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1 # или 'all'
+  #             capabilities: [gpu]
   rabbitmq: # Имя сервиса, по которому другие контейнеры будут к нему обращаться
     image: rabbitmq:3-management-alpine # Образ с UI для управления
     container_name: rabbitmq_broker # Имя самого контейнера
