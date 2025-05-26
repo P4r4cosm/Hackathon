@@ -8,8 +8,6 @@
 ![Интерфейс4](https://github.com/P4r4cosm/Hackathon/blob/ae217addc77ee62bfba7e17c96fbba8d5d90c421/photos/4.jpg)
 ![Интерфейс5](https://github.com/P4r4cosm/Hackathon/blob/ae217addc77ee62bfba7e17c96fbba8d5d90c421/photos/5.jpg)
 
-https://github.com/P4r4cosm/Hackathon/blob/master/photos/architecture.png
-
 # Аудио примеры вы можете найти в директории example
 
 # Описание Проекта
