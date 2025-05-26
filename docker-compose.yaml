@@ -342,7 +342,7 @@ services:
       # Например, если checkpoint.zip скачивается в /app/experiments, а не в /app/experiments/trained_model
       # и historical-denoise/Dockerfile ожидает /app/experiments/trained_model при запуске,
       # то отдельный том для cache не нужен, т.к. все внутри образа historical-denoiser.
-      # - historical_denoise_models_cache:/app/experiments/trained_model # Пример, если нужно
+      - historical_denoise_models_cache:/app/experiments/trained_model # Пример, если нужно
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -356,6 +356,69 @@ services:
           devices:
             - driver: nvidia
               count: 1
+              capabilities: [gpu]
+
+  # Сервис для сборки образа whisper 
+  whisper_cli_app_builder:
+    build:
+      context: ./whisperDocker # Путь к вашему whisper CLI приложению
+      dockerfile: Dockerfile
+    image: local/whisper_cli_app # Имя собираемого образа
+    container_name: whisper_cli_app_builder # Имя контейнера для сборки
+    # Этот сервис нужен только для сборки образа, его не нужно запускать постоянно
+
+  whisper_worker:
+    build:
+      context: ./whisper_worker # Путь к новому whisper_worker
+      dockerfile: Dockerfile
+    container_name: whisper_worker_1
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RABBITMQ_HOST=${RABBITMQ_HOST}
+      - RABBITMQ_PORT=${RABBITMQ_PORT}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASS=${RABBITMQ_PASS}
+      - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
+      # Очередь, обменник и ключ для получения задач Whisper
+      - RABBITMQ_WHISPER_QUEUE_NAME=${RABBITMQ_WHISPER_QUEUE_NAME:-whisper_tasks_queue}
+      - RABBITMQ_AUDIO_PROCESSING_EXCHANGE=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE:-audio_processing_exchange}
+      - RABBITMQ_WHISPER_TASKS_ROUTING_KEY=${RABBITMQ_WHISPER_TASKS_ROUTING_KEY:-whisper.task}
+      # Обменник и ключ для публикации результатов
+      - RABBITMQ_RESULTS_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME:-results_exchange}
+      - RABBITMQ_TASK_RESULTS_ROUTING_KEY_PREFIX=${RABBITMQ_TASK_RESULTS_ROUTING_KEY_PREFIX:-task.result} # будет task.result.whisper
+
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - MINIO_USE_SSL=${MINIO_USE_SSL:-False}
+
+      - WHISPER_MODEL_NAME=${WHISPER_MODEL_NAME:-base} # tiny, base, small, medium, large, large-v2, large-v3
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE} # Оставьте пустым для автоопределения или укажите (например, en, ru)
+      - WHISPER_CACHE_DIR=/app/.cache/whisper # Внутренний путь в контейнере
+
+      - MAX_RETRIES_RABBITMQ=${MAX_RETRIES_RABBITMQ:-5}
+      - RECONNECT_DELAY_SECONDS=${RECONNECT_DELAY_SECONDS:-5}
+    volumes:
+      - whisper_models_cache:/app/.cache/whisper # Том для кэширования моделей Whisper
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      # Зависимость от whisper_cli_app_builder, если он должен быть собран до запуска воркера
+      # Хотя whisper_worker ставит openai-whisper через pip, эта зависимость может быть полезна для порядка сборки
+      whisper_cli_app_builder: 
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1 # или 'all'
               capabilities: [gpu]
 
   rabbitmq: # Имя сервиса, по которому другие контейнеры будут к нему обращаться
@@ -381,5 +444,6 @@ volumes:
   # shared_audio_data: {} # Временно не используется
   demucs_models_cache: {} # Том для кэширования моделей Demucs
   rabbitmq_data: {}
+  whisper_models_cache: {} # Том для кэширования моделей Whisper
   es_data:
   es_logs:
