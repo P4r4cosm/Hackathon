@@ -57,6 +57,173 @@ public class AudioRecordRepository
         }
     }
 
+
+    /// <summary>
+    /// Обно
+    /// </summary>
+    /// <param name="audioRecordDTO"></param>
+    /// <exception cref="Exception"></exception>
+    public async Task EditAudioRecord(AudioRecordEditDTO audioRecordDTO)
+    {
+        //получаем реальную запись
+        var audio = await _dbContext.AudioRecords.Include(a => a.AudioGenres)
+            .Include(a => a.Author)
+            .Include(a => a.Album)
+            .FirstOrDefaultAsync(a => a.Id == audioRecordDTO.Id);
+        if (audio == null)
+            throw new Exception($"Audio record with id {audioRecordDTO.Id} not found");
+
+        // если указано имя создаём автора
+        if (!string.IsNullOrEmpty(audioRecordDTO.AuthorName))
+        {
+            var author = await _dbContext.Authors.FirstOrDefaultAsync(a => a.Name == audioRecordDTO.AuthorName);
+            if (author == null)
+            {
+                author = new Author { Name = audioRecordDTO.AuthorName };
+                _dbContext.Authors.Add(author);
+                //await _dbContext.SaveChangesAsync();
+            }
+
+            audio.Author = author;
+        }
+        //если указан id проверяем существует ли данный автор и отличается ли он от id изначального
+        else if (audioRecordDTO.AuthorId.HasValue)
+        {
+            if (audio.AuthorId == audioRecordDTO.AuthorId.Value)
+            {
+                _logger.LogInformation("The author does not change");
+            }
+            else
+            {
+                if (await _dbContext.Authors.AnyAsync(a => a.Id == audioRecordDTO.AuthorId.Value) == false)
+                {
+                    _logger.LogInformation("The author does not exist");
+                }
+                else
+                {
+                    audio.AuthorId = audioRecordDTO.AuthorId.Value;
+                }
+            }
+        }
+
+        // Check and create album if needed
+        if (!string.IsNullOrEmpty(audioRecordDTO.AlbumTitle))
+        {
+            var album = await _dbContext.Albums.FirstOrDefaultAsync(a => a.Title == audioRecordDTO.AlbumTitle);
+            if (album == null)
+            {
+                album = new Album()
+                {
+                    Title = audioRecordDTO.AlbumTitle,
+                    AuthorId = audio.AuthorId,
+                    Year = audioRecordDTO.Year ?? audio.Year,
+                };
+                _dbContext.Albums.Add(album);
+                //await _dbContext.SaveChangesAsync();
+            }
+
+            audio.Album = album; // Присваиваем навигационное свойство. EF Core обработает AlbumId.
+        }
+        //если указан id проверяем существует ли данный автор и отличается ли он от id изначального
+        else
+        {
+            if (audioRecordDTO.AuthorId.HasValue)
+            {
+                if (audio.AlbumId == audioRecordDTO.AlbumId.Value)
+                {
+                    _logger.LogInformation("The album does not change");
+                }
+                else
+                {
+                    if (await _dbContext.Albums.AnyAsync(a => a.Id == audioRecordDTO.AlbumId.Value) == false)
+                    {
+                        _logger.LogInformation("The album does not exist");
+                    }
+                    else
+                    {
+                        audio.AlbumId = audioRecordDTO.AlbumId.Value;
+                    }
+                }
+            }
+        }
+
+        // Update genres in PostgreSQL
+        if (audioRecordDTO.Genres != null && audioRecordDTO.Genres.Any())
+        {
+            // Удаляем существующие жанры
+            audio.AudioGenres.Clear();
+            // Дедупликация DTO по имени жанра (регистронезависимо)
+            var distinctGenreDtos = audioRecordDTO.Genres
+                .Where(dto => dto != null && !string.IsNullOrWhiteSpace(dto.Name)) // Пропускаем некорректные DTO
+                .GroupBy(dto => dto.Name.Trim(),
+                    StringComparer.OrdinalIgnoreCase) // Группируем по имени (убираем пробелы, игнорируем регистр)
+                .Select(group => group.First()) // Берем первый уникальный DTO из каждой группы
+                .ToList();
+
+            if (distinctGenreDtos.Any())
+            {
+                foreach (var genreDto in distinctGenreDtos) // Итерируемся по уникальным DTO жанров
+                {
+                    var genreName = genreDto.Name.Trim(); // Используем очищенное имя
+                    var genre = await _dbContext.Genres.FirstOrDefaultAsync(g => g.Name == genreName);
+                    if (genre == null)
+                    {
+                        genre = new Genre { Name = genreName };
+                        _dbContext.Genres.Add(genre); // EF отследит и добавит новый жанр
+                    }
+
+                    // Добавляем новую связь. EF Core должен сам установить AudioRecordId из audio.Id
+                    // и GenreId из genre.Id (или запланировать это, если genre новый).
+                    audio.AudioGenres.Add(new AudioGenre
+                    {
+                        // AudioRecord = audio, // Можно указать явно, но EF обычно справляется сам при добавлении в коллекцию
+                        Genre = genre
+                    });
+                }
+            }
+        }
+
+
+        // Update other fields
+        audio.Title = audioRecordDTO.Title ?? audio.Title;
+        audio.Year = audioRecordDTO.Year ?? audio.Year;
+        audio.ModerationStatus.State = audioRecordDTO.ModerationStatus ?? audio.ModerationStatus.State;
+
+        // Get corresponding elastic document
+        var elasticRecord = await GetTrackTextByIdAsync(audio.Id);
+        if (elasticRecord != null)
+        {
+            // Update elastic document fields
+            elasticRecord.Title = audio.Title;
+            elasticRecord.AuthorId = audio.AuthorId;
+            elasticRecord.AuthorName = audio.Author.Name;
+            elasticRecord.AlbumId = audio.AlbumId;
+            elasticRecord.AlbumTitle = audio.Album.Title;
+            elasticRecord.Year = audio.Year;
+            elasticRecord.ModerationStatus = audio.ModerationStatus.State;
+            if (audioRecordDTO.TranscriptSegments != null)
+                elasticRecord.TranscriptSegments = audioRecordDTO.TranscriptSegments;
+            if (audioRecordDTO.FullText != null)
+                elasticRecord.FullText = audioRecordDTO.FullText;
+            if (audio.AudioGenres.Any())
+            {
+                // Убедимся, что у каждого ag.Genre не null, если Genre не был включен явно при загрузке ag.Genre
+                // В данном случае, мы создаем или находим Genre, так что он должен быть.
+                elasticRecord.Genres = audio.AudioGenres
+                    .Where(ag => ag.Genre != null) // Дополнительная проверка на всякий случай
+                    .Select(ag => new GenreDto() { Id = ag.GenreId, Name = ag.Genre.Name }).ToList();
+            }
+
+            if (audioRecordDTO.ThematicTags != null)
+                elasticRecord.ThematicTags = audioRecordDTO.ThematicTags;
+            if (audioRecordDTO.Keywords != null)
+                elasticRecord.Keywords = audioRecordDTO.Keywords;
+            await SaveAsync(elasticRecord);
+        }
+
+        await _dbContext.SaveChangesAsync();
+    }
+
     public async Task<AudioRecord> SaveAsync(AudioRecord audioRecord)
     {
         _dbContext.AudioRecords.Add(audioRecord); // Добавляем аудиозапись в контекст
@@ -91,7 +258,8 @@ public class AudioRecordRepository
         }
         else
         {
-            _logger.LogInformation("Elasticsearch bulk save complete. Saved {count} documents", audioRecords.Count());
+            _logger.LogInformation("Elasticsearch bulk save complete. Saved {count} documents",
+                audioRecords.Count());
         }
     }
 
@@ -111,7 +279,8 @@ public class AudioRecordRepository
 
         if (!response.IsValidResponse)
         {
-            _logger.LogError("Error getting documents from Elasticsearch: {ErrorReason}", response.DebugInformation);
+            _logger.LogError("Error getting documents from Elasticsearch: {ErrorReason}",
+                response.DebugInformation);
             return new List<AudioRecordForElastic>();
         }
 
@@ -167,7 +336,8 @@ public class AudioRecordRepository
 
         if (!response.IsValidResponse)
         {
-            _logger.LogError("Error getting documents from Elasticsearch: {ErrorReason}", response.DebugInformation);
+            _logger.LogError("Error getting documents from Elasticsearch: {ErrorReason}",
+                response.DebugInformation);
             return new List<AudioRecordForElastic?>();
         }
 
@@ -185,7 +355,8 @@ public class AudioRecordRepository
 
         if (!response.IsValidResponse)
         {
-            _logger.LogError("Error getting documents from Elasticsearch: {ErrorReason}", response.DebugInformation);
+            _logger.LogError("Error getting documents from Elasticsearch: {ErrorReason}",
+                response.DebugInformation);
             return new List<AudioRecordForElastic?>();
         }
 
@@ -221,7 +392,8 @@ public class AudioRecordRepository
         return response.Documents.ToList();
     }
 
-    public async Task<List<AudioRecordForElastic>> GetTracksByKeywords(IEnumerable<string> keywords, int from, int size)
+    public async Task<List<AudioRecordForElastic>> GetTracksByKeywords(IEnumerable<string> keywords, int from,
+        int size)
     {
         var response = await _elasticClient.SearchAsync<AudioRecordForElastic>(s => s
             .Index("audio_records") // Указываем индекс
@@ -247,7 +419,8 @@ public class AudioRecordRepository
         return response.Documents.ToList();
     }
 
-    public async Task<List<AudioRecordForElastic>> GetTracksByThematicTags(IEnumerable<string> tags, int from, int size)
+    public async Task<List<AudioRecordForElastic>> GetTracksByThematicTags(IEnumerable<string> tags, int from,
+        int size)
     {
         var response = await _elasticClient.SearchAsync<AudioRecordForElastic>(s => s
             .Index("audio_records") // Указываем индекс

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using SoundService.Models;
 using SoundService.Repositories;
 using SoundService.Services;
 
@@ -55,6 +56,19 @@ public class EditController : ControllerBase
         return Ok();
     }
 
+
+    /// <summary>
+    /// Изменяет почти все поля для конкретной записи, если они указаны в запросе
+    /// Также если указан новый альбом/автор/жанр, то сущности добавятся в postgres
+    /// </summary>
+    /// <param name="data"></param>
+    /// <returns></returns>
+    [HttpPatch("audio")]
+    public async Task<IActionResult> EditAudio(AudioRecordEditDTO data)
+    {
+        await _audioRecordRepository.EditAudioRecord(data);
+        return Ok();
+    }
 
     /// <summary>
     /// изменяет Track Title
