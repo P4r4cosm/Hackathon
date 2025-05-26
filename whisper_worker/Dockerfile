@@ -1,45 +1,64 @@
-ARG CUDA_VERSION=11.8.0
-ARG UBUNTU_VERSION=22.04
-ARG PYTHON_VERSION=3.9
+# Используйте базовый образ с Python и CUDA, если планируется GPU.
+# Выберите версию CUDA, совместимую с вашим драйвером NVIDIA и PyTorch.
+# Например, для CUDA 11.8:
+# FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+# Или для CUDA 12.1:
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+# Если вы НЕ планируете использовать GPU (или хотите отладить на CPU), можно использовать:
+# FROM python:3.10-slim
 
-FROM nvidia/cuda:${CUDA_VERSION}-cudnn8-devel-ubuntu${UBUNTU_VERSION}
+# Устанавливаем некоторые базовые утилиты и Python
+# Для nvidia/cuda образов python часто уже есть, но pip может понадобиться
+# Для python:3.10-slim, apt-get update и python3-pip не нужны, так как python и pip уже есть.
 
-ARG PYTHON_VERSION
-ENV PYTHON_VERSION=${PYTHON_VERSION}
+# Устанавливаем переменные окружения для non-interactive установки
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1 \
+    # Путь для кэша pip
+    PIP_CACHE_DIR=/var/cache/pip \
+    # Путь для кэша моделей Hugging Face Transformers (используется faster-whisper)
+    HF_HOME=/app/.cache/huggingface \
+    # Путь для кэша моделей faster-whisper (если он отличается от HF_HOME или для явности)
+    XDG_CACHE_HOME=/app/.cache
 
-# Установка Python и основных инструментов
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python${PYTHON_VERSION} \
-    python${PYTHON_VERSION}-dev \
-    python${PYTHON_VERSION}-distutils \
+# Создаем директорию для кэша и приложения
+RUN mkdir -p /app/.cache/huggingface /app/.cache/whisper && \
+    chown -R 1000:1000 /app/.cache && \
+    chmod -R 775 /app/.cache
+
+# Для nvidia/cuda образов:
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     python3-pip \
+    python3-dev \
     ffmpeg \
     git \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    # Очистка
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем pip и обновляем его
-RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python${PYTHON_VERSION}
-RUN python${PYTHON_VERSION} -m pip install --upgrade pip setuptools wheel
+# Если используется python:3.10-slim, установка ffmpeg и git будет такой же,
+# но python3-pip и python3-dev не нужны.
 
+# Устанавливаем рабочую директорию
 WORKDIR /app
 
+# Копируем файл зависимостей
 COPY requirements.txt .
 
-# Установка зависимостей Python
-RUN pip install --no-cache-dir -r requirements.txt
+# Устанавливаем зависимости Python
+# --no-cache-dir чтобы не занимать место кэшем pip внутри образа
+# Если вы указали конкретную версию torch в requirements.txt, она будет установлена.
+# В противном случае, faster-whisper потянет совместимую версию.
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+# Копируем код приложения
+COPY worker.py .
 
-# Каталог для кэша моделей Whisper
-ENV XDG_CACHE_HOME=/app/.cache
-RUN mkdir -p ${XDG_CACHE_HOME}/whisper && chmod -R 777 ${XDG_CACHE_HOME}
-ENV WHISPER_CACHE_DIR=${XDG_CACHE_HOME}/whisper
+# Создаем пользователя без привилегий для запуска приложения (хорошая практика)
+# RUN useradd -ms /bin/bash appuser
+# USER appuser
+# Если используете USER appuser, убедитесь, что у него есть права на /app/.cache
 
-# Добавляем пользователя appuser для безопасности
-RUN useradd -ms /bin/bash appuser
-USER appuser
-
-CMD ["python3", "app.py"] 
+# Команда для запуска воркера
+CMD ["python3", "worker.py"]
