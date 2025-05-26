@@ -2,7 +2,7 @@
 ![Архитектура проекта](photos\architecture.png)
 
 # Пример работы
-![Интерфейс1](https://raw.githubusercontent.com/P4r4cosm/Hackathon/9bc6f86a78ab5f94ebe7ca5f8f9a32421f2746f8/1.png)
+![Интерфейс1](https://raw.githubusercontent.com/P4r4cosm/Hackathon/9bc6f86a78ab5f94ebe7ca5f8f9a32421f2746f8/photo/1.png)
 ![Интерфейс2](photos\2.jpg)
 ![Интерфейс3](photos\3.jpg)
 ![Интерфейс4](photos\4.jpg)
