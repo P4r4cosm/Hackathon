@@ -13,35 +13,30 @@
 ## Разделение песен на две дорожки через demucs при самых минимальных настройках с работой на процессоре, модель htdemucs_ft:
 
 ### Оригинал
-<audio controls>
-  <source src="https://p4r4cosm.github.io/Hackathon/audio/8_orig.flac" type="audio/flac">
-  Ваш браузер не поддерживает аудио.
-</audio>
+
+https://github.com/user-attachments/assets/6c6c7725-54f0-4cbc-b2a5-b17bd3dae781
 
 ### Обработанная версия
-<audio controls>
-  <source src="https://p4r4cosm.github.io/Hackathon/audio/8vocals.wav" type="audio/wav">
-  Ваш браузер не поддерживает аудио.
-</audio>
 
-<audio controls>
-  <source src="https://p4r4cosm.github.io/Hackathon/audio/8no_vocals.wav" type="audio/wav">
-  Ваш браузер не поддерживает аудио.
-</audio>
+Только вокал:
+
+https://github.com/user-attachments/assets/d3087798-bc23-4c3e-b26b-d954316284f2
+
+Остальная часть:
+
+https://github.com/user-attachments/assets/650666a0-026c-4f51-a8d3-1479e87b27e3
 
 ## Обработка historical-denoise с работой на процессоре:
 
 ### Оригинал:
-<audio controls>
-  <source src="https://p4r4cosm.github.io/Hackathon/audio/14_war_m_undenoised.flac" type="audio/flac">
-  Ваш браузер не поддерживает аудио.
-</audio>
+
+https://github.com/user-attachments/assets/c3fa8b2c-dbe7-481e-8629-49bd6459edcd
 
 ### Обработанная версия:
-<audio controls>
-  <source src="https://p4r4cosm.github.io/Hackathon/audio/14_war_m_denoised.wav" type="audio/wav">
-  Ваш браузер не поддерживает аудио.
-</audio>
+
+https://github.com/user-attachments/assets/6318054d-a194-43ad-a5ad-82caec8cc6fa
+
+Как вы слышете, шумы и скрежет от винила пропал.
 
 # Описание Проекта
 
