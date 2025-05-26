@@ -1,0 +1,92 @@
+{
+  "mappings": {
+    "properties": {
+      "albumId": { "type": "long" },
+      "albumTitle": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "authorId": { "type": "long" },
+      "authorName": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "duration": { "type": "text" },
+      "fullText": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "genres": {
+        "type": "nested",
+        "properties": {
+          "id": { "type": "long" },
+          "name": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          }
+        }
+      },
+      "id": { "type": "long" },
+      "moderationStatus": { "type": "keyword" },
+      "path": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "title": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "transcriptSegments": {
+        "type": "nested", 
+        "properties": {
+          "end": { "type": "float" },
+          "start": { "type": "float" },
+          "text": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          }
+        }
+      },
+      "uploadedAt": { "type": "date" },
+      "year": { "type": "long" },
+      "thematicTags": { "type": "keyword" },
+      "thematicTagIds": { "type": "long" },
+      "keywords": { "type": "keyword" }
+    }
+  }
+}
