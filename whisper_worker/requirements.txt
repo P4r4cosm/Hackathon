@@ -1,0 +1,5 @@
+pika
+minio
+python-dotenv
+openai-whisper
+# ffmpeg-python # ffmpeg будет установлен через apt-get в Dockerfile 
