@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useUpdateTranscriptionMutation } from '../../redux/services/audioArchiveApi';
+import { useEditAudioMutation } from '../../redux/services/audioArchiveApi';
 
-const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
+const TranscriptionEditor = ({ recordingId, initialText, segments }) => {
   const [transcriptionText, setTranscriptionText] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editStatus, setEditStatus] = useState({ status: '', message: '' });
   
-  const [updateTranscription, { isLoading }] = useUpdateTranscriptionMutation();
+  const [editAudio, { isLoading }] = useEditAudioMutation();
   
   useEffect(() => {
     if (initialText) {
@@ -30,9 +30,9 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
   
   const handleSaveClick = async () => {
     try {
-      await updateTranscription({ 
-        id: recordingId, 
-        text: transcriptionText 
+      await editAudio({ 
+        id: parseInt(recordingId), 
+        fullText: transcriptionText 
       }).unwrap();
       
       setEditMode(false);
@@ -49,7 +49,7 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
     } catch (error) {
       setEditStatus({ 
         status: 'error', 
-        message: `Ошибка при сохранении: ${error.message || 'Неизвестная ошибка'}` 
+        message: `Ошибка при сохранении: ${error.data?.message || error.message || 'Неизвестная ошибка'}` 
       });
     }
   };
@@ -101,11 +101,11 @@ const TranscriptionEditor = ({ recordingId, initialText, timestamps }) => {
         />
       ) : (
         <div className="text-gray-200 whitespace-pre-line">
-          {timestamps ? (
-            timestamps.map((item, index) => (
-              <div key={`timestamp-${index}`} className="mb-2">
-                <span className="text-gray-400">[{item.time}] </span>
-                <span>{item.text}</span>
+          {segments && segments.length > 0 ? (
+            segments.map((segment, index) => (
+              <div key={`segment-${index}`} className="mb-2">
+                <span className="text-gray-400">[{segment.start.toFixed(1)}s] </span>
+                <span>{segment.text}</span>
               </div>
             ))
           ) : (

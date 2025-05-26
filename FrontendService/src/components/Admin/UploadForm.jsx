@@ -1,20 +1,26 @@
 import React, { useState } from 'react';
-import { useGetTagsQuery, useUploadRecordingMutation } from '../../redux/services/audioArchiveApi';
+import { 
+  useGetTagsQuery, 
+  useUploadAudioMutation,
+  useGetGenresQuery 
+} from '../../redux/services/audioArchiveApi';
 import { Loader, Error } from '../';
 
 const UploadForm = () => {
   const [formData, setFormData] = useState({
     title: '',
-    author: '',
+    artistName: '',
+    albumName: '',
     year: '',
-    description: '',
-    tags: [],
+    genres: [],
+    thematicTags: []
   });
   const [audioFile, setAudioFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState({ status: '', message: '' });
 
   const { data: tags, isFetching: isTagsFetching, error: tagsError } = useGetTagsQuery();
-  const [uploadRecording, { isLoading: isUploading }] = useUploadRecordingMutation();
+  const { data: genres, isFetching: isGenresFetching, error: genresError } = useGetGenresQuery();
+  const [uploadAudio, { isLoading: isUploading }] = useUploadAudioMutation();
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -23,7 +29,12 @@ const UploadForm = () => {
 
   const handleTagChange = (e) => {
     const value = Array.from(e.target.selectedOptions, option => option.value);
-    setFormData({ ...formData, tags: value });
+    setFormData({ ...formData, thematicTags: value });
+  };
+
+  const handleGenreChange = (e) => {
+    const value = Array.from(e.target.selectedOptions, option => option.value);
+    setFormData({ ...formData, genres: value });
   };
 
   const handleFileChange = (e) => {
@@ -39,16 +50,25 @@ const UploadForm = () => {
 
     try {
       const submitData = new FormData();
-      submitData.append('file', audioFile);
-      submitData.append('title', formData.title);
-      submitData.append('author', formData.author);
-      submitData.append('year', formData.year);
-      submitData.append('description', formData.description);
-      formData.tags.forEach(tag => {
-        submitData.append('tags', tag);
-      });
+      submitData.append('File', audioFile);
+      submitData.append('FolderToUpload', 'uploads');
+      submitData.append('Title', formData.title);
+      submitData.append('ArtistName', formData.artistName);
+      submitData.append('AlbumName', formData.albumName);
+      
+      if (formData.year) {
+        submitData.append('Year', formData.year);
+      }
+      
+      // Добавляем жанры
+      if (formData.genres && formData.genres.length > 0) {
+        formData.genres.forEach((genreId) => {
+          submitData.append('GenreNames', genreId);
+        });
+      }
 
-      await uploadRecording(submitData).unwrap();
+      const response = await uploadAudio(submitData).unwrap();
+      
       setUploadStatus({ 
         status: 'success', 
         message: 'Запись успешно загружена. Обработка начата.' 
@@ -57,24 +77,26 @@ const UploadForm = () => {
       // Сброс формы
       setFormData({
         title: '',
-        author: '',
+        artistName: '',
+        albumName: '',
         year: '',
-        description: '',
-        tags: [],
+        genres: [],
+        thematicTags: []
       });
       setAudioFile(null);
       document.getElementById('audioFile').value = '';
       
     } catch (error) {
+      console.error('Ошибка загрузки:', error);
       setUploadStatus({ 
         status: 'error', 
-        message: `Ошибка при загрузке: ${error.message || 'Неизвестная ошибка'}` 
+        message: `Ошибка при загрузке: ${error.data?.message || error.message || 'Неизвестная ошибка'}` 
       });
     }
   };
 
-  if (isTagsFetching) return <Loader title="Загрузка..." />;
-  if (tagsError) return <Error />;
+  if (isTagsFetching || isGenresFetching) return <Loader title="Загрузка..." />;
+  if (tagsError || genresError) return <Error />;
 
   return (
     <div className="flex flex-col bg-black/20 backdrop-blur-lg rounded-lg p-6 max-w-3xl mx-auto">
@@ -103,10 +125,21 @@ const UploadForm = () => {
           <label className="text-gray-300 mb-1">Автор/Исполнитель</label>
           <input
             type="text"
-            name="author"
-            value={formData.author}
+            name="artistName"
+            value={formData.artistName}
             onChange={handleInputChange}
             required
+            className="bg-black/30 text-white rounded p-2"
+          />
+        </div>
+
+        <div className="flex flex-col">
+          <label className="text-gray-300 mb-1">Альбом (необязательно)</label>
+          <input
+            type="text"
+            name="albumName"
+            value={formData.albumName}
+            onChange={handleInputChange}
             className="bg-black/30 text-white rounded p-2"
           />
         </div>
@@ -120,33 +153,37 @@ const UploadForm = () => {
             max="1950"
             value={formData.year}
             onChange={handleInputChange}
-            required
             className="bg-black/30 text-white rounded p-2"
           />
         </div>
         
         <div className="flex flex-col">
-          <label className="text-gray-300 mb-1">Описание</label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleInputChange}
-            rows="3"
-            className="bg-black/30 text-white rounded p-2"
-          />
+          <label className="text-gray-300 mb-1">Жанры</label>
+          <select
+            name="genres"
+            multiple
+            value={formData.genres}
+            onChange={handleGenreChange}
+            className="bg-black/30 text-white rounded p-2 h-32"
+          >
+            {genres?.map((genre) => (
+              <option key={genre.id} value={genre.name}>{genre.name}</option>
+            ))}
+          </select>
+          <p className="text-gray-400 text-sm mt-1">Удерживайте Ctrl для выбора нескольких жанров</p>
         </div>
         
         <div className="flex flex-col">
           <label className="text-gray-300 mb-1">Категории/Теги</label>
           <select
-            name="tags"
+            name="thematicTags"
             multiple
-            value={formData.tags}
+            value={formData.thematicTags}
             onChange={handleTagChange}
             className="bg-black/30 text-white rounded p-2 h-32"
           >
             {tags?.map((tag) => (
-              <option key={tag.id} value={tag.id}>{tag.name}</option>
+              <option key={tag.id} value={tag.name}>{tag.name}</option>
             ))}
           </select>
           <p className="text-gray-400 text-sm mt-1">Удерживайте Ctrl для выбора нескольких тегов</p>
