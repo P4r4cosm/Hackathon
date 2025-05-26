@@ -17,9 +17,8 @@ public class AudioRecordForElastic
     public string AlbumTitle { get; set; }          // Если нужен поиск по альбому
     public int? AlbumId {get; set;}
     public int? Year { get; set; }
-    public List<Genre> Genres { get; set; }
+    public List<GenreDto> Genres { get; set; }
     public List<string> ThematicTags { get; set; }   // Список названий тегов ["патриотические", "победа"]
-    public List<int> ThematicTagIds { get; set; }    // Список ID тегов, если фильтрация по ним
     public List<string> Keywords { get; set; }       // Из AudioKeywords, если они тоже участвуют в поиске
     
     public ModerationState ModerationStatus { get; set; }     // Например, "Approved", "Pending"

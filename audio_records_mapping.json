@@ -85,7 +85,6 @@
       "uploadedAt": { "type": "date" },
       "year": { "type": "long" },
       "thematicTags": { "type": "keyword" },
-      "thematicTagIds": { "type": "long" },
       "keywords": { "type": "keyword" }
     }
   }
