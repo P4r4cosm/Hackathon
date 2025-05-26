@@ -321,11 +321,11 @@ services:
       - RABBITMQ_USER=${RABBITMQ_USER}
       - RABBITMQ_PASS=${RABBITMQ_PASS}
       - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
-      - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_HISTORICAL_DENOISE_QUEUE_NAME:-historical_denoise_tasks_queue} # Используйте переменную из .env или значение по умолчанию
-      - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE:-audio_processing_exchange}
-      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_HISTORICAL_DENOISE_ROUTING_KEY:-historical_denoise.task}
-      - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME:-results_exchange}
-      - RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY:-task.result}
+      - RABBITMQ_DENOISE_QUEUE_NAME=${RABBITMQ_DENOISE_QUEUE_NAME} # Используйте переменную из .env или значение по умолчанию
+      - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE}
+      - RABBITMQ_DENOISE_ROUTING_KEY=${RABBITMQ_DENOISE_ROUTING_KEY}
+      - RABBITMQ_RESULTS_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME:-results_exchange}
+      - RABBITMQ_TASK_RESULTS_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY:-task.result}
 
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY} # Используйте переменную из .env
@@ -350,6 +350,7 @@ services:
         condition: service_started
       historical_denoise_base: # <--- ДОБАВЛЕНО
         condition: service_completed_successfully # <--- ДОБАВЛЕНО
+
     deploy:
       resources:
         reservations:
@@ -442,6 +443,7 @@ services:
 
 volumes:
   # shared_audio_data: {} # Временно не используется
+  historical_denoise_models_cache: {}
   demucs_models_cache: {} # Том для кэширования моделей Demucs
   rabbitmq_data: {}
   whisper_models_cache: {} # Том для кэширования моделей Whisper

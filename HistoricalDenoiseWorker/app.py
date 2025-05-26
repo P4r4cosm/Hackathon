@@ -24,12 +24,12 @@ RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'user')
 RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', 'password')
 RABBITMQ_VHOST = os.getenv('RABBITMQ_VHOST', '/')
 
-RABBITMQ_CONSUME_QUEUE_NAME = os.getenv('RABBITMQ_CONSUME_QUEUE_NAME', 'historical_denoise_tasks_queue') # Очередь, которую слушаем
-RABBITMQ_CONSUME_EXCHANGE_NAME = os.getenv('RABBITMQ_CONSUME_EXCHANGE_NAME', 'audio_processing_exchange') # Exchange, к которому привязана очередь
-RABBITMQ_CONSUME_ROUTING_KEY = os.getenv('RABBITMQ_CONSUME_ROUTING_KEY', 'historical_denoise.task') # Ключ для привязки
+RABBITMQ_CONSUME_QUEUE_NAME = os.getenv('RABBITMQ_DENOISE_QUEUE_NAME', 'historical_denoise_tasks_queue') # Очередь, которую слушаем
+RABBITMQ_CONSUME_EXCHANGE_NAME = os.getenv('RABBITMQ_AUDIO_PROCESSING_EXCHANGE', 'audio_processing_exchange') # Exchange, к которому привязана очередь
+RABBITMQ_CONSUME_ROUTING_KEY = os.getenv('RABBITMQ_DENOISE_ROUTING_KEY', 'historical_denoise.task') # Ключ для привязки
 
-RABBITMQ_PUBLISH_EXCHANGE_NAME = os.getenv('RABBITMQ_PUBLISH_EXCHANGE_NAME', 'results_exchange') # Exchange для результатов
-RABBITMQ_PUBLISH_ROUTING_KEY = os.getenv('RABBITMQ_PUBLISH_ROUTING_KEY', 'task.result') # Ключ для результатов (можно сделать специфичнее, если нужно)
+RABBITMQ_PUBLISH_EXCHANGE_NAME = os.getenv('RABBITMQ_RESULTS_EXCHANGE_NAME', 'results_exchange') # Exchange для результатов
+RABBITMQ_PUBLISH_ROUTING_KEY = os.getenv('RABBITMQ_TASK_RESULTS_ROUTING_KEY', 'task.result') # Ключ для результатов (можно сделать специфичнее, если нужно)
 
 MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT', 'localhost:9000')
 MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY')
