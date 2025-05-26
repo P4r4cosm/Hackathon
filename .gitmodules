@@ -1,3 +1,9 @@
 [submodule "demucs"]
 	path = demucs
 	url = https://github.com/ExodusOfGraf/docker-facebook-demucs.git
+[submodule "historical-denoise"]
+	path = demucs
+	url = https://github.com/ExodusOfGraf/historical-denoise.git
+[submodule "whisperDocker"]
+	path = demucs
+	url = https://github.com/ExodusOfGraf/whisperDocker.git
