@@ -1,4 +1,3 @@
-﻿
 ﻿using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -101,7 +100,8 @@ public class RabbitMqService : IDisposable
                 basicProperties: properties,
                 body: body);
 
-            _logger.LogInformation("Sent Demucs Task to exchange '{ExchangeName}' with key '{RoutingKey}'. TaskId: {TaskId}, Message: {MessageBody}",
+            _logger.LogInformation(
+                "Sent Demucs Task to exchange '{ExchangeName}' with key '{RoutingKey}'. TaskId: {TaskId}, Message: {MessageBody}",
                 _conf.AudioProcessingExchange,
                 _conf.DemucsTasksRoutingKey,
                 data.TaskId, // Предполагаем, что у DemucsTaskData есть TaskId
@@ -115,6 +115,45 @@ public class RabbitMqService : IDisposable
         }
     }
 
+    public async Task PublishWhisperTask(WhisperTaskData data)
+    {
+        try
+        {
+            EnsureChannel();
+            var messageBody = JsonSerializer.Serialize(data);
+            var body = Encoding.UTF8.GetBytes(messageBody);
+            var properties = new BasicProperties();
+            properties.Persistent = true;
+            properties.ContentType = "application/json";
+            if (!string.IsNullOrEmpty(data.TaskId))
+            {
+                properties.MessageId = data.TaskId;
+                properties.CorrelationId = data.TaskId;
+            }
+
+            await _channel.BasicPublishAsync(
+                exchange: _conf.AudioProcessingExchange,
+                routingKey: _conf.WhisperTasksRoutingKey,
+                mandatory: false,
+                basicProperties: properties,
+                body: body
+            );
+            _logger.LogInformation(
+                "Sent Whisper Task to exchange '{ExchangeName}' with key '{RoutingKey}'. TaskId: {TaskId}, Message: {MessageBody}",
+                _conf.AudioProcessingExchange,
+                _conf.WhisperTasksRoutingKey,
+                data.TaskId, // Предполагаем, что у WhisperTaskData есть TaskId
+                messageBody);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to publish Whisper task. TaskId: {TaskId}", data.TaskId);
+            // Здесь можно добавить логику retry с Polly или отправку в DLQ (Dead Letter Queue)
+            throw; // Перебрасываем, чтобы вызывающий код мог обработать
+        }
+    }
+
+
     public async void Dispose()
     {
         try
@@ -126,6 +165,7 @@ public class RabbitMqService : IDisposable
         {
             _logger.LogError(ex, "Error closing RabbitMQ channel.");
         }
+
         try
         {
             await _connection.CloseAsync();

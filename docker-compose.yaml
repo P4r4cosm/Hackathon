@@ -383,9 +383,10 @@ services:
       - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_WHISPER_QUEUE_NAME:-whisper_tasks_queue}
       - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE:-audio_processing_exchange}
       - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_WHISPER_ROUTING_KEY:-whisper.task} # Соответствует переменной в Python скрипте
-
+      - RABBITMQ_WHISPER_RESULTS_DEFAULT_QUEUE_NAME = ${RABBITMQ_WHISPER_RESULTS_QUEUE_NAME}
       # Настройки для публикации результатов
       - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME:-results_exchange}
+      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_WHISPER_TASK_ROUTING_KEY}
       #- RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY:-task.result} # Соответствует переменной в Python скрипте
 
       # Настройки MinIO

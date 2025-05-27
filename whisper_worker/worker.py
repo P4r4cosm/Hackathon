@@ -306,8 +306,8 @@ def main():
                 RABBITMQ_PORT, 
                 RABBITMQ_VHOST, 
                 credentials, 
-                heartbeat=600, 
-                blocked_connection_timeout=300
+                heartbeat=1200, 
+                blocked_connection_timeout=600
             )
             connection = pika.BlockingConnection(parameters)
             channel = connection.channel()
