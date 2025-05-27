@@ -17,20 +17,28 @@ public class RabbitMqController: ControllerBase
     
     
     [HttpPost("demucs_task")]
-    public async Task<IActionResult> Test()
+    public async Task<IActionResult> Test(string path)
     {
         var demucsTaskData = new DemucsTaskData
         {
             TaskId = Guid.NewGuid().ToString(),
-            MinioFilePath = "original_tracks/01 - Священная  война.flac"
+            MinioFilePath = path
         };
          await _rabbitMQService.PublishDemucsTask(demucsTaskData);
         return Ok("Сообщение отправлено");
     }
 
     [HttpPost("transcript")]
-    public async Task<IActionResult> Transcipt()
+    public async Task<IActionResult> Transcipt(string path)
     {
+        var whisperTaskData = new WhisperTaskData()
+        {
+            TaskId = Guid.NewGuid().ToString(),
+            input_bucket_name = "audio-bucket",
+            input_object_name = path,
+            output_minio_folder = "/result/whisper"
+        };
+        await _rabbitMQService.PublishWhisperTask(whisperTaskData);
         return Ok();
     }
    

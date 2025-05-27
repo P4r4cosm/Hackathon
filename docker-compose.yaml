@@ -133,6 +133,7 @@ services:
       - rabbitmq 
       - minio    
       - elasticsearch
+      
   frontend:
     build:
       context: . # Контекст сборки - корень проекта
@@ -278,70 +279,70 @@ services:
       minio:
         condition: service_started # Или service_completed_successfully для mc-init
     # --- Для использования GPU (если Dockerfile собран с поддержкой CUDA) ---
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1 # или 'all'
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1 # или 'all'
+              capabilities: [gpu]
 
   # Сервис для сборки базового образа historical-denoiser
-  historical_denoise_base:
-    build:
-      context: ./historical-denoise 
-      dockerfile: Dockerfile       
-    image: historical-denoiser:latest 
-    container_name: historical_denoise_base_builder 
-    # Этот сервис нужен только для сборки образа, его не нужно запускать постоянно
+  # historical_denoise_base:
+  #   build:
+  #     context: ./historical-denoise 
+  #     dockerfile: Dockerfile       
+  #   image: historical-denoiser:latest 
+  #   container_name: historical_denoise_base_builder 
+  #   # Этот сервис нужен только для сборки образа, его не нужно запускать постоянно
 
-  historical_denoise_worker:
-    build:
-      context: ./HistoricalDenoiseWorker
-      dockerfile: Dockerfile
-    container_name: historical_denoise_worker_1
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      - LOG_LEVEL=INFO
-      - RABBITMQ_HOST=${RABBITMQ_HOST}
-      - RABBITMQ_PORT=${RABBITMQ_PORT} 
-      - RABBITMQ_USER=${RABBITMQ_USER}
-      - RABBITMQ_PASS=${RABBITMQ_PASS}
-      - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
-      - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_HISTORICAL_DENOISE_QUEUE_NAME:-historical_denoise_tasks_queue} 
-      - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE:-audio_processing_exchange}
-      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_HISTORICAL_DENOISE_ROUTING_KEY:-historical_denoise.task}
-      - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME:-results_exchange}
-      - RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY:-task.result}
+  # historical_denoise_worker:
+  #   build:
+  #     context: ./HistoricalDenoiseWorker
+  #     dockerfile: Dockerfile
+  #   container_name: historical_denoise_worker_1
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - LOG_LEVEL=INFO
+  #     - RABBITMQ_HOST=${RABBITMQ_HOST}
+  #     - RABBITMQ_PORT=${RABBITMQ_PORT} 
+  #     - RABBITMQ_USER=${RABBITMQ_USER}
+  #     - RABBITMQ_PASS=${RABBITMQ_PASS}
+  #     - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
+  #     - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_HISTORICAL_DENOISE_QUEUE_NAME:-historical_denoise_tasks_queue} 
+  #     - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE:-audio_processing_exchange}
+  #     - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_HISTORICAL_DENOISE_ROUTING_KEY:-historical_denoise.task}
+  #     - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME:-results_exchange}
+  #     - RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY:-task.result}
 
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY} 
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY} 
-      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
-      - MINIO_USE_SSL=False
+  #     - MINIO_ENDPOINT=minio:9000
+  #     - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY} 
+  #     - MINIO_SECRET_KEY=${MINIO_SECRET_KEY} 
+  #     - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+  #     - MINIO_USE_SSL=False
 
-      # Переменные для повторных попыток подключения к RabbitMQ 
-      - MAX_RETRIES_RABBITMQ=${MAX_RETRIES_RABBITMQ:-5}
-      - RECONNECT_DELAY_SECONDS=${RECONNECT_DELAY_SECONDS:-5}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # Для Docker-out-of-Docker
-      - historical_denoise_models_cache:/app/experiments/trained_model # Пример, если нужно
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      minio:
-        condition: service_started
-      historical_denoise_base: 
-        condition: service_completed_successfully 
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu] # Для работы с GPU -- раскоментировать
+  #     # Переменные для повторных попыток подключения к RabbitMQ 
+  #     - MAX_RETRIES_RABBITMQ=${MAX_RETRIES_RABBITMQ:-5}
+  #     - RECONNECT_DELAY_SECONDS=${RECONNECT_DELAY_SECONDS:-5}
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock # Для Docker-out-of-Docker
+  #     - historical_denoise_models_cache:/app/experiments/trained_model # Пример, если нужно
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #     minio:
+  #       condition: service_started
+  #     historical_denoise_base: 
+  #       condition: service_completed_successfully 
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu] # Для работы с GPU -- раскоментировать
 
   rabbitmq: 
     image: rabbitmq:3-management-alpine 
@@ -361,6 +362,76 @@ services:
       timeout: 10s
       retries: 5
 
+
+  whisper_worker:
+    build:
+      context: ./whisper_worker # Путь к директории с Dockerfile и worker.py
+      dockerfile: Dockerfile
+    image: local/faster_whisper_worker # Имя собираемого образа (можно изменить)
+    container_name: faster_whisper_worker_1 # Имя контейнера
+    restart: unless-stopped
+    environment:
+      # Переменные, специфичные для этого воркера, или для переопределения .env
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RABBITMQ_HOST=${RABBITMQ_HOST} # Должны быть определены в .env или здесь
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASS=${RABBITMQ_PASS}
+      - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
+
+      # Настройки очередей для faster-whisper
+      - RABBITMQ_CONSUME_QUEUE_NAME=${RABBITMQ_WHISPER_QUEUE_NAME:-whisper_tasks_queue}
+      - RABBITMQ_CONSUME_EXCHANGE_NAME=${RABBITMQ_AUDIO_PROCESSING_EXCHANGE:-audio_processing_exchange}
+      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_WHISPER_ROUTING_KEY:-whisper.task} # Соответствует переменной в Python скрипте
+      - RABBITMQ_WHISPER_RESULTS_DEFAULT_QUEUE_NAME = ${RABBITMQ_WHISPER_RESULTS_QUEUE_NAME}
+      # Настройки для публикации результатов
+      - RABBITMQ_PUBLISH_EXCHANGE_NAME=${RABBITMQ_RESULTS_EXCHANGE_NAME:-results_exchange}
+      - RABBITMQ_CONSUME_ROUTING_KEY=${RABBITMQ_WHISPER_TASK_ROUTING_KEY}
+      #- RABBITMQ_PUBLISH_ROUTING_KEY=${RABBITMQ_TASK_RESULTS_ROUTING_KEY:-task.result} # Соответствует переменной в Python скрипте
+
+      # Настройки MinIO
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=C5RDgrAREfHtx8lgpayc
+      - MINIO_SECRET_KEY=UYKwpYFjj9ahfea4vCa0ROGhfLiCSsII8LjXwYJc
+      - MINIO_DEFAULT_BUCKET=${MINIO_BUCKET_NAME:-audio-bucket} # Соответствует переменной в Python скрипте
+      - MINIO_USE_SSL=${MINIO_USE_SSL:-False}
+
+      # Настройки Faster Whisper
+      - WHISPER_MODEL_NAME=${WHISPER_MODEL_NAME:-large-v3} # Модель по умолчанию large-v3
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cuda}            # 'cuda' или 'cpu'
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-float16} # 'float16', 'int8', 'float32'
+      - RABBITMQ_WHISPER_RESULT_ROUTING_KEY=${RABBITMQ_WHISPER_RESULT_ROUTING_KEY}
+      # WHISPER_LANGUAGE можно оставить пустым для автоопределения или указать в task_params
+      # - WHISPER_LANGUAGE=
+      - WHISPER_BEAM_SIZE=${WHISPER_BEAM_SIZE:-5}
+
+      # Пути для кэша внутри контейнера (соответствуют Dockerfile)
+      - HF_HOME=/app/.cache/huggingface
+      - XDG_CACHE_HOME=/app/.cache
+      # Путь для скачивания моделей CTranslate2, если faster-whisper его использует явно
+      # Обычно он ориентируется на XDG_CACHE_HOME или HF_HOME/models
+      # Можно также указать переменную окружения, которую CTranslate2 использует для моделей:
+      # - CTRANSLATE2_MODELS_DIR=/app/.cache/ctranslate2_models
+      - MAX_RETRIES_RABBITMQ=${MAX_RETRIES_RABBITMQ:-5}
+      - RECONNECT_DELAY_SECONDS=${RECONNECT_DELAY_SECONDS:-5}
+    volumes:
+      # Том для кэширования моделей Whisper (и других кэшей, указанных в HF_HOME, XDG_CACHE_HOME)
+      # Это ускорит повторные запуски, так как модели не нужно будет скачивать заново.
+      - whisper_models_cache:/app/.cache
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started # или service_healthy, если у minio есть healthcheck
+    # Для использования GPU:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              # count: 1 # Запросить 1 GPU
+              # или
+              capabilities: [gpu] # Запросить все доступные GPU (или те, что разрешены Docker)
 volumes:
   # shared_audio_data: {} # Временно не используется
   historical_denoise_models_cache: {}
