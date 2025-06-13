@@ -1,6 +1,8 @@
 
+using System.Text;
 using DotNetEnv;
 using Microsoft.OpenApi.Models;
+using SoundService.Abstractions;
 using SoundService.Extensions;
 using SoundService.Models.Settings;
 using SoundService.RabbitMQ;
@@ -8,6 +10,7 @@ using SoundService.Repositories;
 using SoundService.Services;
 
 Env.Load();
+Console.OutputEncoding = Encoding.UTF8;
 var builder = WebApplication.CreateBuilder(args);
 
 // Увеличиваем лимит на чтение тела запроса (например, до 200 МБ)
@@ -96,6 +99,8 @@ builder.Services.AddSingleton<RabbitMqConf>();
 builder.Services.AddHostedService<RabbitMQInitializer>();
 builder.Services.AddSingleton<RabbitMqService>();
 
+builder.Services.AddScoped<ITaskResultHandler, TaskResultHandler>();
+builder.Services.AddHostedService<RabbitMqResultListener>();
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
