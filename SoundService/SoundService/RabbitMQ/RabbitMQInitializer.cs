@@ -69,11 +69,10 @@ public class RabbitMQInitializer : IHostedService
         _logger.LogInformation("RabbitMQ Initializer: Declaring RabbitMQ infrastructure...");
         try
         {
-            
-            _connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+             _connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
             _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
 
-            // Exchange для задач
+            // --- Exchange для ЗАДАЧ ---
             await _channel.ExchangeDeclareAsync(
                 exchange: _conf.AudioProcessingExchange,
                 type: ExchangeType.Direct,
@@ -97,12 +96,12 @@ public class RabbitMQInitializer : IHostedService
             await _channel.QueueBindAsync(
                 queue: _conf.WhisperQueueName,
                 exchange: _conf.AudioProcessingExchange,
-                routingKey: _conf.TaskResultsWhisperRoutingKey);
+                routingKey: _conf.WhisperTasksRoutingKey); // <<< ИСПРАВЛЕНО ЗДЕСЬ
 
-            // Exchange для результатов
+            // --- Exchange для РЕЗУЛЬТАТОВ ---
             await _channel.ExchangeDeclareAsync(
                 exchange: _conf.ResultsExchangeName,
-                type: ExchangeType.Direct, // или Topic, если нужна более сложная маршрутизация результатов
+                type: ExchangeType.Direct, 
                 durable: true);
 
             // Очередь для Demucs результатов
@@ -113,7 +112,7 @@ public class RabbitMQInitializer : IHostedService
             await _channel.QueueBindAsync(
                 queue: _conf.TaskResultsDemucsName,
                 exchange: _conf.ResultsExchangeName,
-                routingKey: _conf.WhisperTasksRoutingKey); // или "#" если ResultsExchange типа Topic
+                routingKey: _conf.TaskResultsDemucsRoutingKey); // <<< ИСПРАВЛЕНО ЗДЕСЬ
             
             //Очередь для результатов Whisper
             
