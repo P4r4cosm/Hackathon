@@ -177,6 +177,7 @@ def callback(ch, method, properties, body):
 
         input_object_name = message_data.get("input_object_name")
         output_minio_folder = message_data.get("output_minio_folder", "whisper_output").strip('/')
+        original_input_object = message_data.get("original_input_object") or input_object_name
         current_bucket_name = message_data.get("input_bucket_name", MINIO_BUCKET_NAME)
 
         if not input_object_name:
@@ -231,7 +232,8 @@ def callback(ch, method, properties, body):
                 result_for_rabbitmq = {
                     "task_id": task_id, "status": "success", "service": "whisper",
                     "tool_version": whisper.__version__, "model_used": WHISPER_MODEL_NAME,
-                    "input_bucket": current_bucket_name, "input_object": input_object_name,
+                    "input_bucket": current_bucket_name, "input_object": original_input_object,
+                    "processed_object": input_object_name, 
                     "transcription_detailed_json_object_path": f"s3://{current_bucket_name}/{output_json_minio_object_name}",
                     "language_requested": "ru", "language_detected_by_model": transcription_result.get("language"),
                     "full_text": detailed_transcription_data["full_text"], "segments": detailed_transcription_data["segments"]
@@ -240,8 +242,13 @@ def callback(ch, method, properties, body):
                 ch.basic_ack(delivery_tag=method.delivery_tag)
                 logger.info(f"Задача {task_id}: Успешно обработана, результаты опубликованы.")
             else:
-                logger.error(f"Задача {task_id}: Транскрибация не удалась для {input_object_name}.")
-                error_payload = {"task_id": task_id, "status": "error", "service": "whisper", "input_bucket": current_bucket_name, "input_object": input_object_name, "error_message": "Transcription failed in whisper_worker."}
+                # ... (обработка ошибки транскрибации без изменений) ...
+                # Добавим original_input_object в сообщение об ошибке для полноты картины
+                error_payload = {"task_id": task_id, "status": "error", "service": "whisper", 
+                                 "input_bucket": current_bucket_name, 
+                                 "input_object": original_input_object,
+                                 "processed_object": input_object_name,
+                                 "error_message": "Transcription failed in whisper_worker."}
                 publish_result(ch, error_payload, task_id)
                 ch.basic_ack(delivery_tag=method.delivery_tag)
     

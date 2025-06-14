@@ -177,7 +177,7 @@ def process_single_task(task_id, input_bucket, input_object_name, output_file_ba
             return demucs_error # Возвращаем словарь с ошибкой
 
         # 3. Загрузить результат в MinIO
-        minio_output_object_name = f"results/demucs/{task_id}_{output_file_basename}_vocals.wav"
+        minio_output_object_name = f"results/demucs/{output_file_basename}.wav"
         logger.info(f"Задача {task_id}: Загрузка {vocals_file_path} в s3://{input_bucket}/{minio_output_object_name}")
         try:
             minio_client_instance.fput_object(
@@ -221,11 +221,16 @@ def on_message_callback(channel, method_frame, properties, body):
                                       {"error_message": "Неверная задача: отсутствует путь к входному объекту."})
             channel.basic_ack(delivery_tag=method_frame.delivery_tag)
             return
+        
+        original_input_path = input_object 
 
         logger.info(f"Задача {task_id_from_msg}: Обработка s3://{input_bucket}/{input_object}")
         logger.info(f"Устройство для Demucs: {DEMUCS_DEVICE}. Версия PyTorch: {torch.__version__}. CUDA доступно: {torch.cuda.is_available()}")
 
         result_payload = process_single_task(task_id_from_msg, input_bucket, input_object, output_basename)
+
+        if "error_message" not in result_payload:
+            result_payload["original_input_object"] = original_input_path
 
         if "error_message" in result_payload:
             publish_processing_result(channel, task_id_from_msg, "error", result_payload)

@@ -12,4 +12,8 @@ public class DemucsResultData:  TaskResultBase
 
     [JsonPropertyName("output_object_name")]
     public string OutputObjectName { get; set; }
+    
+    // ДОБАВЛЕНО: Путь к исходному файлу, который был обработан Demucs
+    [JsonPropertyName("original_input_object")]
+    public string OriginalInputObject { get; set; }
 }

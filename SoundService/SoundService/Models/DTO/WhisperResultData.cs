@@ -4,6 +4,10 @@ namespace SoundService.Models;
 
 public class WhisperResultData : TaskResultBase
 {
+    // ДОБАВЛЕНО: Путь к ОРИГИНАЛЬНОМУ файлу, который инициировал всю цепочку
+    [JsonPropertyName("input_object")]
+    public string InputObject { get; set; }
+    
     [JsonPropertyName("service")]
     public string Service { get; set; } // "whisper"
 

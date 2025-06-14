@@ -73,7 +73,11 @@ public class RabbitMqService : IDisposable
         }
     }
 
-
+    /// <summary>
+    /// Публикует задачу для Demucs-а, как только придёт результат обработки сработает метод
+    /// TaskResultHandler.HandleDemucsResultAsync()
+    /// </summary>
+    /// <param name="data"></param>
     public async Task PublishDemucsTask(DemucsTaskData data)
     {
         try
