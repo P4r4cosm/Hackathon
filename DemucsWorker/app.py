@@ -1,10 +1,10 @@
 import os
+import sys
 import uuid
 import subprocess
 import pika
 import json
 import torch
-import shutil
 import time
 import tempfile
 from minio import Minio
@@ -14,24 +14,35 @@ import logging
 # --- Конфигурация логирования ---
 logging.basicConfig(
     level=os.getenv('LOG_LEVEL', 'INFO').upper(),
-    format='%(asctime)s - %(levelname)s - %(process)d - %(threadName)s - %(module)s - %(funcName)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(process)d - %(module)s - %(funcName)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# --- Конфигурация из переменных окружения ---
-RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'localhost')
-RABBITMQ_PORT = int(os.getenv('RABBITMQ_PORT', 5672))
-RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'user')
-RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', 'password')
-RABBITMQ_VHOST = os.getenv('RABBITMQ_VHOST', '/')
+# --- Универсальная конфигурация RabbitMQ ---
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
+RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
+RABBITMQ_USER = os.getenv("RABBITMQ_USER", "user")
+RABBITMQ_PASS = os.getenv("RABBITMQ_PASS", "password")
+RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", "/")
 
-RABBITMQ_CONSUME_QUEUE_NAME = os.getenv('RABBITMQ_CONSUME_QUEUE_NAME', 'demucs_tasks_queue')
-RABBITMQ_CONSUME_EXCHANGE_NAME = os.getenv('RABBITMQ_CONSUME_EXCHANGE_NAME', 'audio_processing_exchange')
-RABBITMQ_CONSUME_ROUTING_KEY = os.getenv('RABBITMQ_CONSUME_ROUTING_KEY', 'demucs.task')
+CONSUME_QUEUE = os.getenv('RABBITMQ_CONSUME_QUEUE')
+CONSUME_EXCHANGE = os.getenv('RABBITMQ_CONSUME_EXCHANGE')
+CONSUME_ROUTING_KEY = os.getenv('RABBITMQ_CONSUME_ROUTING_KEY')
 
-RABBITMQ_PUBLISH_EXCHANGE_NAME = os.getenv('RABBITMQ_PUBLISH_EXCHANGE_NAME', 'results_exchange')
-RABBITMQ_PUBLISH_ROUTING_KEY = os.getenv('RABBITMQ_PUBLISH_ROUTING_KEY', 'task.result.demucs')
+PUBLISH_EXCHANGE = os.getenv('RABBITMQ_PUBLISH_EXCHANGE')
+PUBLISH_ROUTING_KEY = os.getenv('RABBITMQ_PUBLISH_ROUTING_KEY')
 
+# --- Проверка обязательных переменных RabbitMQ ---
+required_vars = [
+    'CONSUME_QUEUE', 'CONSUME_EXCHANGE', 'CONSUME_ROUTING_KEY',
+    'PUBLISH_EXCHANGE', 'PUBLISH_ROUTING_KEY'
+]
+missing_vars = [var for var in required_vars if not globals()[var]]
+if missing_vars:
+    logger.critical(f"ОШИБКА: Отсутствуют обязательные переменные окружения RabbitMQ: {', '.join(missing_vars)}")
+    sys.exit(1)
+
+# --- Остальная конфигурация ---
 MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT', 'localhost:9000')
 MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY')
 MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY')
@@ -42,73 +53,56 @@ DEMUCS_MODEL = os.getenv('DEMUCS_MODEL', "htdemucs")
 DEMUCS_SHIFTS = int(os.getenv('DEMUCS_SHIFTS', 0))
 DEMUCS_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-RECONNECT_DELAY_SECONDS = 5
-MAX_RETRIES_RABBITMQ = int(os.getenv('MAX_RETRIES_RABBITMQ', 5))
+RECONNECT_DELAY_SECONDS = int(os.getenv("RECONNECT_DELAY_SECONDS", 5))
 
-# --- Инициализация клиента MinIO ---
-minio_client = None
-try:
-    if not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
-        logger.error("Переменные окружения MINIO_ACCESS_KEY и MINIO_SECRET_KEY должны быть установлены.")
-        exit(1)
-    minio_client = Minio(
-        MINIO_ENDPOINT,
-        access_key=MINIO_ACCESS_KEY,
-        secret_key=MINIO_SECRET_KEY,
-        secure=MINIO_USE_SSL
-    )
-    logger.info(f"Клиент MinIO успешно инициализирован для эндпоинта {MINIO_ENDPOINT}")
-except Exception as e:
-    logger.error(f"Не удалось инициализировать клиент MinIO: {e}")
-    exit(1)
+MINIO_CLIENT = None
 
+# --- Функции ---
 
-def ensure_minio_bucket_exists(bucket_name):
-    """Проверяет существование бакета и создает его, если необходимо."""
-    try:
-        buckets = minio_client.list_buckets()
-        for b in buckets:
-            logger.info(f"Найден бакет: {b.name}")
-        logger.info(f"Список бакетов успешно получен. Проверка наличия '{bucket_name}'...")
+def get_minio_client():
+    # ... (код такой же, как в whisper_worker)
+    global MINIO_CLIENT
+    if MINIO_CLIENT is None:
+        try:
+            MINIO_CLIENT = Minio(
+                MINIO_ENDPOINT,
+                access_key=MINIO_ACCESS_KEY,
+                secret_key=MINIO_SECRET_KEY,
+                secure=MINIO_USE_SSL,
+            )
+            logger.info(f"MinIO client initialized for endpoint: {MINIO_ENDPOINT}")
+        except Exception as e:
+            logger.error(f"Failed to initialize MinIO client: {e}")
+            MINIO_CLIENT = None
+            raise
+    return MINIO_CLIENT
 
-        found = minio_client.bucket_exists(bucket_name)
-        if not found:
-            minio_client.make_bucket(bucket_name)
-            logger.info(f"Бакет MinIO '{bucket_name}' создан.")
-        else:
-            logger.info(f"Бакет MinIO '{bucket_name}' уже существует.")
-    except S3Error as e:
-        logger.error(f"Ошибка MinIO при проверке или создании бакета {bucket_name}: {e}")
-        raise # Перебрасываем, чтобы обработать выше
-
-
+# ИСПРАВЛЕНО: функция публикации стала универсальной
 def publish_processing_result(channel, task_id, status, result_data):
-    """Отправляет результат обработки обратно в RabbitMQ."""
     message_payload = {
         "task_id": task_id,
-        "tool": "demucs", # Добавим для ясности, какой воркер отработал
+        "service": "demucs",
         "status": status,
         **result_data
     }
     try:
         channel.basic_publish(
-            exchange=RABBITMQ_PUBLISH_EXCHANGE_NAME,
-            routing_key=RABBITMQ_PUBLISH_ROUTING_KEY,
+            exchange=PUBLISH_EXCHANGE,
+            routing_key=PUBLISH_ROUTING_KEY,
             body=json.dumps(message_payload),
             properties=pika.BasicProperties(
                 delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
                 content_type='application/json',
-                correlation_id=task_id # Полезно для связи
+                correlation_id=task_id
             )
         )
-        logger.info(f"Результат для task_id {task_id} опубликован: tool='demucs', status='{status}'")
+        logger.info(f"Результат для task_id {task_id} опубликован в '{PUBLISH_EXCHANGE}' с ключом '{PUBLISH_ROUTING_KEY}'")
     except Exception as e:
         logger.error(f"Не удалось опубликовать результат для task_id {task_id}: {e}")
-        # Здесь можно добавить логику повторной отправки или обработки ошибки
 
-
+# Функции run_demucs_process и process_single_task остаются без изменений
 def run_demucs_process(task_id, input_audio_path, base_output_dir):
-    """Запускает процесс Demucs."""
+    # ... (код без изменений)
     demucs_output_subpath = os.path.join(DEMUCS_MODEL, os.path.splitext(os.path.basename(input_audio_path))[0])
     expected_vocals_file = os.path.join(base_output_dir, demucs_output_subpath, "vocals.wav")
 
@@ -156,9 +150,8 @@ def run_demucs_process(task_id, input_audio_path, base_output_dir):
         logger.exception(f"Задача {task_id}: Исключение во время выполнения Demucs: {e}")
         return None, {"error_message": f"Исключение при выполнении Demucs: {str(e)}"}
 
-
 def process_single_task(task_id, input_bucket, input_object_name, output_file_basename):
-    """Полный цикл обработки одной задачи: скачать, Demucs, загрузить."""
+    # ... (код без изменений)
     with tempfile.TemporaryDirectory(prefix="demucs_worker_") as temp_dir:
         local_input_dir = os.path.join(temp_dir, "input")
         local_output_base_dir = os.path.join(temp_dir, "output")
@@ -171,8 +164,9 @@ def process_single_task(task_id, input_bucket, input_object_name, output_file_ba
 
         # 1. Скачать файл из MinIO
         logger.info(f"Задача {task_id}: Загрузка s3://{input_bucket}/{input_object_name} в {local_input_path}")
+        minio_client_instance = get_minio_client()
         try:
-            minio_client.fget_object(input_bucket, input_object_name, local_input_path)
+            minio_client_instance.fget_object(input_bucket, input_object_name, local_input_path)
         except S3Error as e:
             logger.error(f"Задача {task_id}: Ошибка загрузки из MinIO: {e}")
             return {"error_message": f"Ошибка загрузки из MinIO: {str(e)}", "details": {"bucket": input_bucket, "object": input_object_name}}
@@ -186,7 +180,7 @@ def process_single_task(task_id, input_bucket, input_object_name, output_file_ba
         minio_output_object_name = f"results/demucs/{task_id}_{output_file_basename}_vocals.wav"
         logger.info(f"Задача {task_id}: Загрузка {vocals_file_path} в s3://{input_bucket}/{minio_output_object_name}")
         try:
-            minio_client.fput_object(
+            minio_client_instance.fput_object(
                 input_bucket,
                 minio_output_object_name,
                 vocals_file_path,
@@ -205,9 +199,9 @@ def process_single_task(task_id, input_bucket, input_object_name, output_file_ba
             logger.exception(f"Задача {task_id}: Исключение во время выгрузки в MinIO: {e}")
             return {"error_message": f"Исключение при выгрузке в MinIO: {str(e)}"}
 
-
+# Код on_message_callback остается почти без изменений
 def on_message_callback(channel, method_frame, properties, body):
-    """Обработчик входящего сообщения от RabbitMQ."""
+    # ... (код без изменений)
     task_id_from_msg = "unknown_task"
     try:
         message_str = body.decode('utf-8')
@@ -244,108 +238,72 @@ def on_message_callback(channel, method_frame, properties, body):
     except json.JSONDecodeError as e:
         logger.error(f"Не удалось декодировать JSON сообщение: {body[:200]}... Ошибка: {e}")
         channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)
+    except pika.exceptions.AMQPConnectionError as e:
+        logger.error(f"Задача {task_id_from_msg}: Ошибка соединения RabbitMQ во время обработки: {e}")
+        raise
     except Exception as e:
         logger.exception(f"Необработанное исключение при обработке задачи {task_id_from_msg} (delivery_tag={method_frame.delivery_tag}): {e}")
-        # Попытка отправить сообщение об ошибке, если это возможно
         try:
-            error_msg_payload = {
-                "task_id": task_id_from_msg,
-                "status": "error",
-                "error_message": f"Необработанное исключение воркера: {str(e)}"
-            }
+            error_msg_payload = {"task_id": task_id_from_msg, "status": "error", "error_message": f"Необработанное исключение воркера: {str(e)}"}
             publish_processing_result(channel, task_id_from_msg, "error", error_msg_payload)
         except Exception as pub_e:
             logger.error(f"Не удалось опубликовать критическое сообщение об ошибке для задачи {task_id_from_msg}: {pub_e}")
-        channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False) # Не переотправлять после серьезной ошибки
+        channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=False)
 
-
+# ИСПРАВЛЕНО: main() теперь проще и надежнее, как в whisper_worker
 def main():
     logger.info(f"Demucs Worker запускается... Устройство: {DEMUCS_DEVICE}")
+    logger.info(f"Слушает очередь '{CONSUME_QUEUE}'")
+    logger.info(f"Публикует результаты в '{PUBLISH_EXCHANGE}' с ключом '{PUBLISH_ROUTING_KEY}'")
 
     try:
-        ensure_minio_bucket_exists(MINIO_DEFAULT_BUCKET) # Проверка/создание бакета при старте
-    except Exception as e_minio_init:
-        logger.error(f"Критическая ошибка при проверке/создании бакета MinIO '{MINIO_DEFAULT_BUCKET}': {e_minio_init}. Воркер не может запуститься.")
-        return # Выход, если MinIO недоступен или бакет не может быть создан
+        get_minio_client()
+    except Exception as e:
+        logger.critical(f"Критическая ошибка: Не удалось подключиться к MinIO при старте: {e}. Воркер не будет запущен.")
+        return
 
     connection = None
-    retries = 0
-    while retries < MAX_RETRIES_RABBITMQ or MAX_RETRIES_RABBITMQ == 0: # 0 для бесконечных попыток
+    while True:
         try:
-            logger.info(f"Попытка подключения к RabbitMQ: {RABBITMQ_HOST}:{RABBITMQ_PORT} (Попытка {retries + 1})")
+            logger.info(f"Попытка подключения к RabbitMQ: {RABBITMQ_HOST}:{RABBITMQ_PORT}...")
             credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
             parameters = pika.ConnectionParameters(
-                RABBITMQ_HOST,
-                RABBITMQ_PORT,
-                RABBITMQ_VHOST,
-                credentials,
-                heartbeat=600,
-                blocked_connection_timeout=300
+                RABBITMQ_HOST, RABBITMQ_PORT, RABBITMQ_VHOST, credentials,
+                heartbeat=600, blocked_connection_timeout=300
             )
             connection = pika.BlockingConnection(parameters)
             channel = connection.channel()
             logger.info("Успешное подключение к RabbitMQ.")
-            retries = 0 # Сброс счетчика при успешном подключении
 
-            channel.exchange_declare(exchange=RABBITMQ_CONSUME_EXCHANGE_NAME, exchange_type='direct', durable=True)
-            channel.queue_declare(queue=RABBITMQ_CONSUME_QUEUE_NAME, durable=True)
-            channel.queue_bind(
-                exchange=RABBITMQ_CONSUME_EXCHANGE_NAME,
-                queue=RABBITMQ_CONSUME_QUEUE_NAME,
-                routing_key=RABBITMQ_CONSUME_ROUTING_KEY
-            )
-            channel.exchange_declare(exchange=RABBITMQ_PUBLISH_EXCHANGE_NAME, exchange_type='direct', durable=True)
-            
-            channel.basic_qos(prefetch_count=1) # Обрабатывать по одному сообщению за раз
-            channel.basic_consume(
-                queue=RABBITMQ_CONSUME_QUEUE_NAME,
-                on_message_callback=on_message_callback
-            )
+            # ИЗМЕНЕНО: Тип обменника на topic
+            channel.exchange_declare(exchange=CONSUME_EXCHANGE, exchange_type='topic', durable=True)
+            channel.exchange_declare(exchange=PUBLISH_EXCHANGE, exchange_type='topic', durable=True)
 
-            logger.info(f"[*] Ожидание задач в очереди '{RABBITMQ_CONSUME_QUEUE_NAME}'. Для выхода нажмите CTRL+C")
+            channel.queue_declare(queue=CONSUME_QUEUE, durable=True)
+            channel.queue_bind(exchange=CONSUME_EXCHANGE, queue=CONSUME_QUEUE, routing_key=CONSUME_ROUTING_KEY)
+
+            channel.basic_qos(prefetch_count=1)
+            channel.basic_consume(queue=CONSUME_QUEUE, on_message_callback=on_message_callback)
+
+            logger.info(f"[*] Ожидание задач в очереди '{CONSUME_QUEUE}'. Для выхода нажмите CTRL+C")
             channel.start_consuming()
-            # Если start_consuming завершился штатно (например, KeyboardInterrupt в callback или stop_consuming)
-            break # Выход из цикла while
 
         except pika.exceptions.AMQPConnectionError as e:
-            logger.error(f"Ошибка подключения/канала RabbitMQ: {e}")
-            if connection and not connection.is_closed:
-                try: connection.close()
-                except: pass # Игнорируем ошибки при закрытии проблемного соединения
-            retries += 1
-            if MAX_RETRIES_RABBITMQ > 0 and retries >= MAX_RETRIES_RABBITMQ:
-                logger.error(f"Достигнуто максимальное количество попыток подключения к RabbitMQ ({MAX_RETRIES_RABBITMQ}). Выход.")
-                break # Выход из цикла while
-            logger.info(f"Повторная попытка через {RECONNECT_DELAY_SECONDS} секунд...")
-            time.sleep(RECONNECT_DELAY_SECONDS)
-        except KeyboardInterrupt: # Обработка Ctrl+C в главном цикле
-            logger.info("Demucs Worker корректно завершает работу по прерыванию пользователя...")
-            if connection and channel and channel.is_open:
+            logger.warning(f"Потеряно соединение с RabbitMQ: {e}")
+        except KeyboardInterrupt:
+            logger.info("Получен сигнал KeyboardInterrupt. Завершение работы...")
+            if channel and channel.is_open:
                 channel.stop_consuming()
-            # Закрытие соединения будет в finally
-            break # Выход из цикла while
-        except Exception as e: # Другие неожиданные ошибки в главном цикле
-            logger.exception(f"Произошла неожиданная критическая ошибка в основном цикле: {e}")
-            # Попытка закрыть соединение, если оно есть
-            if connection and not connection.is_closed:
-                try: connection.close()
-                except: pass
-            retries += 1 
-            if MAX_RETRIES_RABBITMQ > 0 and retries >= MAX_RETRIES_RABBITMQ:
-                logger.error(f"Достигнуто максимальное количество попыток после критической ошибки. Выход.")
-                break # Выход из цикла while
-            logger.info(f"Повторная попытка через {RECONNECT_DELAY_SECONDS * 2} секунд после критической ошибки...")
-            time.sleep(RECONNECT_DELAY_SECONDS * 2) # Увеличенная задержка после серьезной ошибки
+            break
+        except Exception as e:
+            logger.error(f"Произошла непредвиденная ошибка в главном цикле: {e}")
         finally:
             if connection and connection.is_open:
-                logger.info("Закрытие соединения RabbitMQ в блоке finally...")
-                try: connection.close()
-                except Exception as e_close:
-                    logger.error(f"Ошибка при закрытии соединения RabbitMQ: {e_close}")
-            logger.info("Соединение RabbitMQ закрыто или не было открыто.")
+                connection.close()
+            logger.info(f"Повторная попытка через {RECONNECT_DELAY_SECONDS} секунд...")
+            time.sleep(RECONNECT_DELAY_SECONDS)
 
     logger.info("Demucs Worker остановлен.")
-
 
 if __name__ == '__main__':
     main()

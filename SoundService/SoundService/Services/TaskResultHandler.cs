@@ -23,7 +23,7 @@ public class TaskResultHandler : ITaskResultHandler
     public Task HandleWhisperResultAsync(WhisperResultData result)
     {
         _logger.LogInformation("Получен успешный результат от Whisper для TaskId: {TaskId}. Текст: {Text}",
-            result.TaskId, result.FullText.Substring(0, Math.Min(100, result.FullText.Length)));
+            result.TaskId, result.FullText);
         // TODO: Сохранить транскрипцию в базе данных
         return Task.CompletedTask;
     }

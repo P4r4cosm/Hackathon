@@ -46,8 +46,8 @@ public class RabbitMqResultListener: BackgroundService
                 
                 _logger.LogInformation("RabbitMQ Result Listener: Connection established. Setting up consumers.");
 
-                await SetupConsumer(_conf.TaskResultsDemucsName, _conf.TaskResultsDemucsRoutingKey, stoppingToken);
-                await SetupConsumer(_conf.WhisperResultQueueName, _conf.TaskResultsWhisperRoutingKey, stoppingToken);
+                await SetupConsumer(_conf.DemucsResultQueue, _conf.DemucsResultRoutingKey, stoppingToken);
+                await SetupConsumer(_conf.WhisperResultQueue, _conf.WhisperResultRoutingKey, stoppingToken);
 
                 // Держим ExecuteAsync живым, пока не придет сигнал отмены
                 await Task.Delay(Timeout.Infinite, stoppingToken);
@@ -94,12 +94,12 @@ public class RabbitMqResultListener: BackgroundService
                 {
                     await resultHandler.HandleFailedResultAsync(baseResult, message);
                 }
-                else if (ea.RoutingKey == _conf.TaskResultsDemucsRoutingKey)
+                else if (ea.RoutingKey == _conf.DemucsResultRoutingKey)
                 {
                     var demucsResult = JsonSerializer.Deserialize<DemucsResultData>(message);
                     await resultHandler.HandleDemucsResultAsync(demucsResult);
                 }
-                else if (ea.RoutingKey == _conf.TaskResultsWhisperRoutingKey)
+                else if (ea.RoutingKey == _conf.WhisperResultRoutingKey)
                 {
                     var whisperResult = JsonSerializer.Deserialize<WhisperResultData>(message);
                     await resultHandler.HandleWhisperResultAsync(whisperResult);
