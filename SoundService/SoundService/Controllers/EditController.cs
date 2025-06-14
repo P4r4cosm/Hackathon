@@ -66,7 +66,7 @@ public class EditController : ControllerBase
     [HttpPatch("audio")]
     public async Task<IActionResult> EditAudio(AudioRecordEditDTO data)
     {
-        await _audioRecordRepository.EditAudioRecord(data);
+        await _audioRecordRepository.EditAudioRecordAsync(data);
         return Ok();
     }
 

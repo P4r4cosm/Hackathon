@@ -1,47 +1,11 @@
-﻿﻿using Microsoft.Extensions.Hosting;
+﻿// SoundService/RabbitMQ/RabbitMQInitializer.cs
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 using System.Threading;
 using System.Threading.Tasks;
-
-
-namespace SoundService.RabbitMQ;
-
-// RabbitMqConstants.cs
-public class RabbitMqConf
-{
-    public RabbitMqConf(IConfiguration configuration)
-    {
-        DemucsQueueName = configuration["RABBITMQ_DEMUCS_QUEUE_NAME"];
-        DemucsTasksRoutingKey = configuration["RABBITMQ_DEMUCS_TASKS_ROUTING_KEY"];
-        AudioProcessingExchange = configuration["RABBITMQ_AUDIO_PROCESSING_EXCHANGE"];
-        ResultsExchangeName = configuration["RABBITMQ_RESULTS_EXCHANGE_NAME"];
-        TaskResultsDemucsName = configuration["RABBITMQ_TASK_RESULTS_QUEUE_NAME"];
-        TaskResultsDemucsRoutingKey = configuration["RABBITMQ_TASK_RESULTS_ROUTING_KEY"];
-        WhisperQueueName = configuration["RABBITMQ_WHISPER_QUEUE_NAME"];
-        TaskResultsWhisperRoutingKey = configuration["RABBITMQ_WHISPER_RESULT_ROUTING_KEY"];
-        WhisperResultQueueName = configuration["RABBITMQ_WHISPER_RESULTS_QUEUE_NAME"];
-        WhisperTasksRoutingKey = configuration["RABBITMQ_WHISPER_TASK_ROUTING_KEY"];
-
-    }
-
-    public readonly string DemucsQueueName;
-    public readonly string DemucsTasksRoutingKey;
-    public readonly string AudioProcessingExchange;
-
-    public readonly string ResultsExchangeName;
-    public readonly string TaskResultsDemucsName;
-    public readonly string TaskResultsDemucsRoutingKey;
-
-    public readonly string WhisperQueueName; //очередь для задач
-    
-    public readonly string TaskResultsWhisperRoutingKey; //ключ для очереди с результатами
-
-    public readonly string WhisperResultQueueName;
-
-    public readonly string WhisperTasksRoutingKey;
-}
+using SoundService.RabbitMQ;
 
 public class RabbitMQInitializer : IHostedService
 {
@@ -61,6 +25,7 @@ public class RabbitMQInitializer : IHostedService
             UserName = configuration["RABBITMQ_USER"],
             Password = configuration["RABBITMQ_PASS"],
             Port = configuration.GetValue<int>("RABBITMQ_PORT"),
+            VirtualHost = configuration["RABBITMQ_VHOST"]
         };
     }
 
@@ -69,69 +34,44 @@ public class RabbitMQInitializer : IHostedService
         _logger.LogInformation("RabbitMQ Initializer: Declaring RabbitMQ infrastructure...");
         try
         {
-            
             _connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
             _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
 
-            // Exchange для задач
+            // --- ОБМЕННИК ДЛЯ ЗАДАЧ (TASKS EXCHANGE) ---
             await _channel.ExchangeDeclareAsync(
-                exchange: _conf.AudioProcessingExchange,
-                type: ExchangeType.Direct,
+                exchange: _conf.TasksExchange,
+                type: ExchangeType.Topic, // Topic более гибкий, чем Direct
                 durable: true);
 
-            // Очередь для Demucs задач
-            await _channel.QueueDeclareAsync(
-                queue: _conf.DemucsQueueName,
-                durable: true, exclusive: false, autoDelete: false, arguments: null);
-
-            await _channel.QueueBindAsync(
-                queue: _conf.DemucsQueueName,
-                exchange: _conf.AudioProcessingExchange,
-                routingKey: _conf.DemucsTasksRoutingKey);
-            
-            // Очередь для Whisper задач
-            await _channel.QueueDeclareAsync(
-                queue: _conf.WhisperQueueName,
-                durable: true, exclusive: false, autoDelete: false, arguments: null);
-
-            await _channel.QueueBindAsync(
-                queue: _conf.WhisperQueueName,
-                exchange: _conf.AudioProcessingExchange,
-                routingKey: _conf.TaskResultsWhisperRoutingKey);
-
-            // Exchange для результатов
+            // --- ОБМЕННИК ДЛЯ РЕЗУЛЬТАТОВ (RESULTS EXCHANGE) ---
             await _channel.ExchangeDeclareAsync(
-                exchange: _conf.ResultsExchangeName,
-                type: ExchangeType.Direct, // или Topic, если нужна более сложная маршрутизация результатов
+                exchange: _conf.ResultsExchange,
+                type: ExchangeType.Topic, // Topic более гибкий
                 durable: true);
 
-            // Очередь для Demucs результатов
-            await _channel.QueueDeclareAsync(
-                queue: _conf.TaskResultsDemucsName,
-                durable: true, exclusive: false, autoDelete: false, arguments: null);
-
-            await _channel.QueueBindAsync(
-                queue: _conf.TaskResultsDemucsName,
-                exchange: _conf.ResultsExchangeName,
-                routingKey: _conf.WhisperTasksRoutingKey); // или "#" если ResultsExchange типа Topic
+            // --- ТОПОЛОГИЯ ДЛЯ DEMUCS ---
+            // Очередь для задач Demucs
+            await _channel.QueueDeclareAsync(queue: _conf.DemucsTaskQueue, durable: true, exclusive: false, autoDelete: false);
+            await _channel.QueueBindAsync(queue: _conf.DemucsTaskQueue, exchange: _conf.TasksExchange, routingKey: _conf.DemucsTaskRoutingKey);
             
-            //Очередь для результатов Whisper
+            // Очередь для результатов Demucs
+            await _channel.QueueDeclareAsync(queue: _conf.DemucsResultQueue, durable: true, exclusive: false, autoDelete: false);
+            await _channel.QueueBindAsync(queue: _conf.DemucsResultQueue, exchange: _conf.ResultsExchange, routingKey: _conf.DemucsResultRoutingKey);
             
-            await _channel.QueueDeclareAsync(
-                queue: _conf.WhisperResultQueueName,
-                durable:true, exclusive:false, autoDelete:false, arguments:null);
+            // --- ТОПОЛОГИЯ ДЛЯ WHISPER ---
+            // Очередь для задач Whisper
+            await _channel.QueueDeclareAsync(queue: _conf.WhisperTaskQueue, durable: true, exclusive: false, autoDelete: false);
+            await _channel.QueueBindAsync(queue: _conf.WhisperTaskQueue, exchange: _conf.TasksExchange, routingKey: _conf.WhisperTaskRoutingKey);
 
-            await _channel.QueueBindAsync(
-                queue: _conf.WhisperResultQueueName,
-                exchange: _conf.ResultsExchangeName,
-                routingKey: _conf.TaskResultsWhisperRoutingKey);
-
+            // Очередь для результатов Whisper
+            await _channel.QueueDeclareAsync(queue: _conf.WhisperResultQueue, durable: true, exclusive: false, autoDelete: false);
+            await _channel.QueueBindAsync(queue: _conf.WhisperResultQueue, exchange: _conf.ResultsExchange, routingKey: _conf.WhisperResultRoutingKey);
+            
             _logger.LogInformation("RabbitMQ infrastructure declared successfully.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to declare RabbitMQ infrastructure.");
-            // В зависимости от критичности, можно остановить приложение или реализовать логику ожидания
             throw;
         }
     }

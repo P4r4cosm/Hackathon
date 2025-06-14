@@ -73,7 +73,11 @@ public class RabbitMqService : IDisposable
         }
     }
 
-
+    /// <summary>
+    /// Публикует задачу для Demucs-а, как только придёт результат обработки сработает метод
+    /// TaskResultHandler.HandleDemucsResultAsync()
+    /// </summary>
+    /// <param name="data"></param>
     public async Task PublishDemucsTask(DemucsTaskData data)
     {
         try
@@ -94,16 +98,16 @@ public class RabbitMqService : IDisposable
 
             // Публикуем в ваш AudioProcessingExchange с правильным routingKey
             await _channel.BasicPublishAsync(
-                exchange: _conf.AudioProcessingExchange,
-                routingKey: _conf.DemucsTasksRoutingKey,
+                exchange: _conf.TasksExchange,
+                routingKey: _conf.DemucsTaskRoutingKey,
                 mandatory: false, // Если true и сообщение не может быть смашрутизировано, оно вернется (событие BasicReturn)
                 basicProperties: properties,
                 body: body);
 
             _logger.LogInformation(
                 "Sent Demucs Task to exchange '{ExchangeName}' with key '{RoutingKey}'. TaskId: {TaskId}, Message: {MessageBody}",
-                _conf.AudioProcessingExchange,
-                _conf.DemucsTasksRoutingKey,
+                _conf.TasksExchange,
+                _conf.DemucsTaskRoutingKey,
                 data.TaskId, // Предполагаем, что у DemucsTaskData есть TaskId
                 messageBody);
         }
@@ -132,16 +136,16 @@ public class RabbitMqService : IDisposable
             }
 
             await _channel.BasicPublishAsync(
-                exchange: _conf.AudioProcessingExchange,
-                routingKey: _conf.WhisperTasksRoutingKey,
+                exchange: _conf.TasksExchange,
+                routingKey: _conf.WhisperTaskRoutingKey,
                 mandatory: false,
                 basicProperties: properties,
                 body: body
             );
             _logger.LogInformation(
                 "Sent Whisper Task to exchange '{ExchangeName}' with key '{RoutingKey}'. TaskId: {TaskId}, Message: {MessageBody}",
-                _conf.AudioProcessingExchange,
-                _conf.WhisperTasksRoutingKey,
+                _conf.TasksExchange,
+                _conf.WhisperTaskRoutingKey,
                 data.TaskId, // Предполагаем, что у WhisperTaskData есть TaskId
                 messageBody);
         }

@@ -63,7 +63,7 @@ public class AudioRecordRepository
     /// </summary>
     /// <param name="audioRecordDTO"></param>
     /// <exception cref="Exception"></exception>
-    public async Task EditAudioRecord(AudioRecordEditDTO audioRecordDTO)
+    public async Task EditAudioRecordAsync(AudioRecordEditDTO audioRecordDTO)
     {
         //получаем реальную запись
         var audio = await _dbContext.AudioRecords.Include(a => a.AudioGenres)
@@ -417,6 +417,55 @@ public class AudioRecordRepository
         }
 
         return response.Documents.ToList();
+    }
+
+    public async Task EditAudioRecordAsyncByPath(string path, string fulltext, List<TranscriptSegment> segments)
+    {
+        var response = await _elasticClient.UpdateByQueryAsync<AudioRecordForElastic>("audio_records", req => req
+            .Query(q => q
+                .Term(t => t.Field("path.keyword").Value(path))
+            )
+            // 2. SCRIPT: Описать, какие поля и как нужно обновить.
+            .Script(s => s
+                // Исходный код скрипта на языке Painless
+                .Source(
+                    "ctx._source.fullText = params.newFullText; ctx._source.transcriptSegments = params.newSegments;")
+                // Передача параметров в скрипт. Это безопасно и эффективно.
+                .Params(p => p
+                    .Add("newFullText", fulltext)
+                    .Add("newSegments", segments)
+                )
+            )
+            // Опционально: не останавливаться при конфликтах версий
+            .Conflicts(Conflicts.Proceed)
+            // Опционально, но рекомендуется: дождаться завершения операции
+            .WaitForCompletion(true)
+        );
+
+        // 3. ПРОВЕРКА РЕЗУЛЬТАТА
+        if (response.IsValidResponse)
+        {
+            Console.WriteLine(
+                $"Операция завершена. Найдено документов: {response.Total}. Обновлено: {response.Updated}.");
+            if (response.Updated == 0 && response.Total > 0)
+            {
+                Console.WriteLine("Документ был найден, но не обновлен. Возможно, данные уже были идентичны.");
+            }
+            else if (response.Total == 0)
+            {
+                Console.WriteLine($"Внимание: Документ с путем '{path}' не найден.");
+            }
+        }
+        else
+        {
+            // Если что-то пошло не так, выводим отладочную информацию
+            Console.WriteLine("Ошибка при выполнении UpdateByQuery:");
+            Console.WriteLine(response.DebugInformation);
+            if (response.ElasticsearchServerError != null)
+            {
+                Console.WriteLine($"Ошибка от сервера Elasticsearch: {response.ElasticsearchServerError.Error.Reason}");
+            }
+        }
     }
 
     public async Task<List<AudioRecordForElastic>> GetTracksByThematicTags(IEnumerable<string> tags, int from,
