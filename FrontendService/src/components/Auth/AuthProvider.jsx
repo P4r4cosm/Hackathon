@@ -1,103 +1,63 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// file: src/components/Auth/AuthProvider.jsx
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import api from '../api/axios'; // Мы будем использовать наш централизованный Axios
 
-// Создаем контекст авторизации
-const AuthContext = createContext();
-
+export const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // loading теперь очень важен! Он показывает, что идет проверка сессии.
   const [loading, setLoading] = useState(true);
 
-  // Функция проверки авторизации
-  const checkAuth = async () => {
+  // Функция проверки сессии. useCallback для мемоизации.
+  const checkAuthStatus = useCallback(async () => {
     try {
-      // Проверяем наличие токена в localStorage
-      const token = localStorage.getItem('authToken');
+      // Отправляем запрос на эндпоинт, который вернет данные пользователя, если сессия валидна.
+      // Axios (настроенный ниже) автоматически отправит HttpOnly cookie.
+      const response = await api.get('/profile'); // <-- Убедитесь, что такой эндпоинт есть на бэкенде!
       
-      if (!token) {
-        // Если токена нет, пользователь не авторизован
-        setIsAuthenticated(false);
-        setUser(null);
-      } else {
-        // У нас есть токен, считаем пользователя авторизованным
-        setIsAuthenticated(true);
-        
-        // Если в localStorage есть данные пользователя, используем их
-        const savedUserData = localStorage.getItem('userData');
-        if (savedUserData) {
-          try {
-            const userData = JSON.parse(savedUserData);
-            setUser(userData);
-          } catch (error) {
-            console.error('Ошибка при разборе данных пользователя:', error);
-          }
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Функция входа - сохраняет токен, полученный от сервиса авторизации
-  const login = (token, userData) => {
-    localStorage.setItem('authToken', token);
-    if (userData) {
-      localStorage.setItem('userData', JSON.stringify(userData));
-    }
-    setUser(userData);
-    setIsAuthenticated(true);
-  };
-
-  // Функция выхода - удаляет токен и сбрасывает состояние
-  const logout = async () => {
-    try {
-      // Отправляем запрос на выход к сервису авторизации
-      await fetch('http://localhost:8000/logout', {
-        method: 'POST',
-        credentials: 'include'
-      });
+      // Если запрос успешен (код 200), значит, сессия есть.
+      setUser(response.data);
+      setIsAuthenticated(true);
     } catch (error) {
-      console.error('Ошибка при выходе:', error);
-    } finally {
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('userData');
+      // Если бэкенд вернул 401, значит, сессии нет.
+      console.log('Сессия не найдена или истекла.');
       setUser(null);
       setIsAuthenticated(false);
+    } finally {
+      // В любом случае, проверка завершена.
+      setLoading(false);
+    }
+  }, []);
+
+  // Запускаем проверку один раз при монтировании компонента
+  useEffect(() => {
+    checkAuthStatus();
+  }, [checkAuthStatus]);
+
+  const logout = async () => {
+    try {
+      // Отправляем запрос на выход, чтобы бэкенд очистил cookie
+      await api.post('/logout');
+    } catch (error) {
+      console.error('Ошибка при выходе на сервере:', error);
+    } finally {
+      // Сбрасываем состояние на клиенте
+      setUser(null);
+      setIsAuthenticated(false);
+      // Перенаправляем на страницу входа
+      window.location.href = 'http://localhost:3010/login.html'; // Укажите правильный URL
     }
   };
 
-  // При монтировании компонента проверяем авторизацию
-  useEffect(() => {
-    // Слушаем сообщения от окна авторизации
-    const handleAuthMessage = (event) => {
-      // Проверяем, что сообщение от нашего сервиса авторизации
-      if (event.origin === 'http://localhost:3010' && event.data?.type === 'AUTH_TOKEN') {
-        login(event.data.token, event.data.user);
-      }
-    };
+  const value = { user, isAuthenticated, loading, logout };
 
-    window.addEventListener('message', handleAuthMessage);
-    checkAuth();
-
-    return () => {
-      window.removeEventListener('message', handleAuthMessage);
-    };
-  }, []);
-
-  // Предоставляем контекст авторизации всем дочерним компонентам
   return (
-    <AuthContext.Provider
-      value={{
-        isAuthenticated,
-        user,
-        loading,
-        login,
-        logout,
-      }}
-    >
-      {children}
+    <AuthContext.Provider value={value}>
+      {/* Не рендерим дочерние компоненты, пока идет проверка */}
+      {!loading && children}
     </AuthContext.Provider>
   );
-}; 
+};

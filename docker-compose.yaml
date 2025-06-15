@@ -85,8 +85,8 @@ services:
       - AllowedOrigins__3=http://frontend
     volumes:
       - ./cert.pfx:/app/cert.pfx
-    depends_on:
-      - authservice
+    #depends_on:
+     # - authservice
   soundservice:
     build:
       context: .
@@ -151,11 +151,7 @@ services:
     container_name: Frontend
     ports:
       - "3000:80"   # Хост 3000 -> Контейнер 80 (HTTP)
-    depends_on:
-      - gateway
-      - postgres
-      - elasticsearch
-      - minio
+   
 
   authservicefrontend:
     build:
@@ -168,9 +164,7 @@ services:
     environment:
       - ASPNETCORE_URLS=http://+:80;https://+:443 # Kestrel будет слушать оба порта
       - KESTREL_CERTIFICATE_PASSWORD=${KESTREL_CERT_PASSWORD}
-    depends_on:
-      - authservice
-      - gateway
+   
   elasticsearch:
     image: elasticsearch:8.17.3
     container_name: elastic

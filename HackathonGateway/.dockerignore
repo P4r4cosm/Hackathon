@@ -23,3 +23,25 @@
 **/values.dev.yaml
 LICENSE
 README.md
+
+
+# Игнорировать вывод сборки
+**/bin/
+**/obj/
+
+# Игнорировать специфичные для IDE и ОС файлы
+.vs/
+.vscode/
+*.suo
+*.user
+*.sln.docstates
+
+# Игнорировать файлы Docker и Git
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose*.yml
+
+# Игнорировать другие файлы
+README.md

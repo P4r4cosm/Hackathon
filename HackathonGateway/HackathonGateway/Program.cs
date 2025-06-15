@@ -19,7 +19,7 @@ services.AddAuthorization();
 //конфигурация для JWT
 var configuration = builder.Configuration;
 var jwtSettings = configuration.GetSection("JwtSettings");
-var secretKey =jwtSettings["SecretKey"];
+var secretKey = jwtSettings["SecretKey"];
 var issuer = jwtSettings["Issuer"];
 var audience = jwtSettings["Audience"];
 // 1. Настройка Аутентификации JWT
@@ -40,7 +40,7 @@ services.AddAuthentication(options =>
             ValidIssuer = jwtSettings["Issuer"],
             ValidateAudience = true,
             ValidAudience = jwtSettings["Audience"],
-            RoleClaimType = ClaimTypes.Role, 
+            RoleClaimType = ClaimTypes.Role,
             ClockSkew = TimeSpan.Zero
         };
         // Чтение токена из куки
@@ -53,6 +53,14 @@ services.AddAuthentication(options =>
                     context.Token = tokenFromCookie;
                 }
 
+                return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = context =>
+            {
+                // Выводим ошибку в консоль контейнера Gateway
+                Console.WriteLine("--- GATEWAY AUTHENTICATION FAILED ---");
+                Console.WriteLine(context.Exception.ToString());
+                Console.WriteLine("-------------------------------------");
                 return Task.CompletedTask;
             }
         };
@@ -72,7 +80,7 @@ services.AddAuthorization(options =>
 // 3. Добавление и конфигурация YARP
 services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
-   
+
 services.AddControllers();
 
 // Добавление и конфигурация CORS
@@ -81,10 +89,9 @@ services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policyBuilder =>
     {
-
         // Получаем список разрешенных источников из конфигурации или используем значения по умолчанию
         var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
-        
+
         if (allowedOrigins != null && allowedOrigins.Length > 0)
         {
             policyBuilder
@@ -100,7 +107,7 @@ services.AddCors(options =>
             {
                 policyBuilder
                     .WithOrigins(
-                        "http://localhost:3010", 
+                        "http://localhost:3010",
                         "http://localhost:3000",
                         "http://127.0.0.1:3010",
                         "http://127.0.0.1:3000"
@@ -119,6 +126,7 @@ services.AddCors(options =>
                     .AllowCredentials();
             }
         }
+
         policyBuilder
             .WithOrigins("https://localhost:3000") // URL вашего фронтенда
             .AllowAnyMethod()
@@ -139,6 +147,7 @@ if (app.Environment.IsDevelopment())
         options.RoutePrefix = ""; // Доступ по /swagger
     });
 }
+
 app.UseCors("CorsPolicy"); // Применить CORS
 
 // app.UseHttpsRedirection(); // Отключаем автоматический редирект на HTTPS
@@ -149,5 +158,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 // 3. Используйте YARP
 app.MapReverseProxy();
-app.MapControllers(); 
+app.MapControllers();
 app.Run();

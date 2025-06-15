@@ -7,6 +7,7 @@ using AuthService.Models.DTO;
 using AuthService.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -56,14 +57,14 @@ public class AuthController : ControllerBase
             Secure = true,
             Expires = refreshTokenExpires,
             SameSite = SameSiteMode.Lax,
-            Path = "/refresh" 
+            Path = "/" 
         });
     }
     private void DeleteAuthCookies()
     {
         var cookieOptions = new CookieOptions { Secure = true, HttpOnly = true, SameSite = SameSiteMode.Lax, Path = "/" };
         Response.Cookies.Delete("access_token", cookieOptions);
-        cookieOptions.Path = "/refresh"; // Путь для refresh_token
+        cookieOptions.Path = "/"; // Путь для refresh_token
         Response.Cookies.Delete("refresh_token", cookieOptions);
     }
     
@@ -430,6 +431,40 @@ public class AuthController : ControllerBase
         DeleteAuthCookies();
         _logger.LogInformation("User logged out and auth cookies deleted.");
         return Ok(new { Message = "Logged out successfully" });
+    }
+    
+    [HttpGet("profile")] // Создаем новый маршрут: GET /api/Auth/profile
+    [Authorize]
+    public async Task<IActionResult> GetProfile()
+    {
+        // Если код дошел до сюда, значит токен в cookie валиден (проверен middleware)
+        // И мы можем безопасно получить ID пользователя из его "удостоверения" (ClaimsPrincipal)
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            // Этого не должно произойти, если [Authorize] работает, но это хорошая проверка
+            return Unauthorized();
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return NotFound(new { Message = "User not found." });
+        }
+
+        // Возвращаем фронтенду безопасный объект с данными пользователя (DTO)
+        // Никогда не возвращайте всю модель пользователя целиком!
+        var userProfile = new 
+        {
+            Id = user.Id,
+            Name = user.UserName, // или другое поле имени
+            Email = user.Email,
+            // Вы также можете добавить роли, если они нужны на фронтенде
+            Roles = await _userManager.GetRolesAsync(user) 
+        };
+
+        return Ok(userProfile);
     }
 
 

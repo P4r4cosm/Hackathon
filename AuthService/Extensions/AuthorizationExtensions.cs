@@ -19,10 +19,10 @@ public static class AuthorizationExtensions
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>
             {
                 // Password settings.
-                //options.Password.RequireDigit = true;
-                //.Password.RequireLowercase = true;
-                //options.Password.RequireNonAlphanumeric = true;
-                //options.Password.RequireUppercase = true;
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireUppercase = true;
                 options.Password.RequiredLength = 6;
                 //options.Password.RequiredUniqueChars = 1;
 
@@ -59,9 +59,9 @@ public static class AuthorizationExtensions
     {
         services.AddAuthentication(options =>
             {
-                options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                //options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
             })
             .AddCookie(options =>
             {
@@ -120,7 +120,7 @@ public static class AuthorizationExtensions
                 {
                     OnMessageReceived = context =>
                     {
-                        context.Token = context.Request.Cookies["auth_token"]; // Имя вашей cookie
+                        context.Token = context.Request.Cookies["access_token"]; // Имя вашей cookie
                         return Task.CompletedTask;
                     }
                 };
